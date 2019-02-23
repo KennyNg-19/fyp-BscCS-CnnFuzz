@@ -101,22 +101,23 @@ for i in range(img_num):
     #seed_list
     img_list = []
 
-    img_path = os.path.join(img_dir,img_paths[i])
-
-    img_name = img_paths[i].split('.')[0]
-
-    mannual_label = int(img_name.split('_')[1])
+    
+    img_path = os.path.join(img_dir,img_paths[i]) # single img path, including its name(img_paths[i])
 
     print("Input "+ str(i+1) + "/" + str(img_num) + ": " + img_path)
 
-    tmp_img = preprocess_image(img_path)
+    tmp_img = preprocess_image(img_path) # function, return a copy of the img in the path
 
     orig_img = tmp_img.copy()
 
     img_list.append(tmp_img)
 
-
-    # ----------------------------------------------------------------
+        
+    # to get Label
+    img_name = img_paths[i].split('.')[0] # extract img name without the suffix(after the “.”）
+    mannual_label = int(img_name.split('_')[1]) # the label is exactly in the name
+    
+# ----------------------------------------------------------------
 
     update_coverage(tmp_img, model1, model_layer_times2, threshold)
 

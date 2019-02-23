@@ -68,6 +68,11 @@ def constraint_black(gradients, rect_shape=(10, 10)):
     return new_grads
 
 
+
+
+
+
+# --------------------------------------------------
 def init_dict(model, model_layer_dict):
     for layer in model.layers:
         if 'flatten' in layer.name or 'input' in layer.name:
