@@ -1,1 +1,1 @@
-/mnt/c/Users/Administrator/Desktop/FYP/DLFuzz-master/MNIST
+/mnt/c/Users/Administrator/Desktop/FYP/DLFuzz/MNIST

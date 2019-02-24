@@ -5,7 +5,8 @@ from collections import defaultdict
 
 import numpy as np
 from datetime import datetime
-from keras import backend as K
+from keras import backend as K # 使用抽象 Keras 后端编写新代码
+# 如果你希望你编写的 Keras 模块与 Theano (th) 和 TensorFlow (tf) 兼容，则必须通过抽象 Keras 后端 API 来编写它们。
 from keras.applications.vgg16 import preprocess_input, decode_predictions
 from keras.models import Model
 
@@ -14,7 +15,7 @@ model_layer_weights_top_k = []
 
 from keras.preprocessing import image
 def preprocess_image(img_path):
-    img = image.load_img(img_path, target_size=(28, 28), grayscale=True)
+    img = image.load_img(img_path, target_size=(28, 28), color_mode = "grayscale")
     input_img_data = image.img_to_array(img)
     input_img_data = input_img_data.reshape(1, 28, 28, 1)
 
@@ -96,6 +97,8 @@ def init_coverage_tables(model1):
     init_dict(model1, model_layer_dict1)
     return model_layer_dict1
 
+
+
 def init_coverage_times(model):
     model_layer_times = defaultdict(int)
     init_times(model,model_layer_times)
@@ -106,15 +109,20 @@ def init_coverage_value(model):
     init_times(model, model_layer_value)
     return model_layer_value
 
-def init_times(model,model_layer_times):
+def init_times(model, model_layer_times): # 将model的一些'cover有效的'layers的model_layer_times 整个由一个dict 来表示
     for layer in model.layers:
+        # 对于不经过activation的layer, 不考虑其coverage
         if 'flatten' in layer.name or 'input' in layer.name:
             continue
-        for index in range(layer.output_shape[-1]):
-            model_layer_times[(layer.name, index)] = 0
+        # 对于经过activation的layer
+        for index in range(layer.output_shape[-1]): # 输出张量 last D
+            model_layer_times[(layer.name, index)] = 0 # (layer.name, index) 一起做key, 因为是仅由一个dict来表示： index指代具体neuron
 
 
 
+
+
+# -------------------------------------------------------------------------------------------------------------------
 
 def neuron_to_cover(model_layer_dict):
     not_covered = [(layer_name, index) for (layer_name, index), v in model_layer_dict.items() if not v]
@@ -126,19 +134,23 @@ def neuron_to_cover(model_layer_dict):
 
 
 def neuron_to_cover(not_covered,model_layer_dict):
-    if not_covered:
+    if not_covered: # 只要有传参，赋了值
         layer_name, index = random.choice(not_covered)
         not_covered.remove((layer_name, index))
     else:
         layer_name, index = random.choice(model_layer_dict.keys())
     return layer_name, index
 
-def random_strategy(model,model_layer_times, neuron_to_cover_num):
+# not_covered neurons的list中 random select neuron
+def random_strategy(model,model_layer_times, target_neuron_cover_num):
     loss_neuron = []
     not_covered = [(layer_name, index) for (layer_name, index), v in model_layer_times.items() if v == 0]
-    for _ in range(neuron_to_cover_num):
+    for _ in range(target_neuron_cover_num):
+        # random 选择 not covered的neurons, 并计算出其value
         layer_name, index = neuron_to_cover(not_covered, model_layer_times)
-        loss00_neuron = K.mean(model.get_layer(layer_name).output[..., index])
+    # Note: 为什么要计算并返回其output activation value? 因为max neuron coverage 就是 max value 使其activate !!!
+        loss00_neuron = K.mean(model.get_layer(layer_name).output[..., index]) # keras.backend.mean, 张量在某一指定轴的均值
+        
         # if loss_neuron == 0:
         #     loss_neuron = loss00_neuron
         # else:
@@ -172,12 +184,13 @@ def neuron_select_high_weight(model, layer_names, top_k):
         k += 1
 
 
-def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_strategy, neuron_to_cover_num, threshold):
+def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_strategy, target_neuron_cover_num, threshold):
     if neuron_select_strategy == 'None':
-        return random_strategy(model, model_layer_times, neuron_to_cover_num)
+        return random_strategy(model, model_layer_times, target_neuron_cover_num)
 
-    num_strategy = len([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']])
-    neuron_to_cover_num_each = int(neuron_to_cover_num / num_strategy)
+    # neuron_select_strategy input 允许使用多个strategy: neuron_select_strategy是str !!!
+    num_strategy = len([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']]) 
+    target_neuron_cover_num_each = int(target_neuron_cover_num / num_strategy) # 将需要cover的平均给每个strategy
 
     loss_neuron = []
     # initialization for strategies
@@ -189,7 +202,8 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
             neurons_covered_times.append(time)
             neurons_key_pos[i] = (layer_name, index)
             i += 1
-        neurons_covered_times = np.asarray(neurons_covered_times)
+        # asarray不会复制再返复制值，而是和原ndarray 占用同一个内存, 跟=复制什么区别？
+        neurons_covered_times = np.asarray(neurons_covered_times) 
         times_total = sum(neurons_covered_times)
 
     # select neurons covered often
@@ -198,7 +212,9 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
             return random_strategy(model, model_layer_times, 1)#The beginning of no neurons covered
         neurons_covered_percentage = neurons_covered_times / float(times_total)
         # num_neuron0 = np.random.choice(range(len(neurons_covered_times)), p=neurons_covered_percentage)
-        num_neuron0 = np.random.choice(range(len(neurons_covered_times)), neuron_to_cover_num_each, replace=False, p=neurons_covered_percentage)
+        # 从len(neurons_covered_times))中随机选 target_neuron_cover_num_each个
+        num_neuron0 = np.random.choice(range(len(neurons_covered_times)), target_neuron_cover_num_each, replace=False, 
+            p=neurons_covered_percentage)
         for num in num_neuron0:
             layer_name0, index0 = neurons_key_pos[num]
             loss0_neuron = K.mean(model.get_layer(layer_name0).output[..., index0])
@@ -211,7 +227,7 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
         neurons_covered_times_inverse = np.subtract(max(neurons_covered_times), neurons_covered_times)
         neurons_covered_percentage_inverse = neurons_covered_times_inverse / float(sum(neurons_covered_times_inverse))
         # num_neuron1 = np.random.choice(range(len(neurons_covered_times)), p=neurons_covered_percentage_inverse)
-        num_neuron1 = np.random.choice(range(len(neurons_covered_times)), neuron_to_cover_num_each, replace=False,
+        num_neuron1 = np.random.choice(range(len(neurons_covered_times)), target_neuron_cover_num_each, replace=False,
                                        p=neurons_covered_percentage_inverse)
         for num in num_neuron1:
             layer_name1, index1 = neurons_key_pos[num]
@@ -228,7 +244,7 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
         if len(model_layer_weights_top_k) == 0:
             neuron_select_high_weight(model, layer_names, top_k)  # Set the value
 
-        num_neuron2 = np.random.choice(range(len(model_layer_weights_top_k)), neuron_to_cover_num_each, replace=False)
+        num_neuron2 = np.random.choice(range(len(model_layer_weights_top_k)), target_neuron_cover_num_each, replace=False)
         for i in num_neuron2:
             # i = np.random.choice(range(len(model_layer_weights_top_k)))
             layer_name2 = model_layer_weights_top_k[i][0]
@@ -239,8 +255,8 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
     if '3' in list(neuron_select_strategy):
         above_threshold = []
         below_threshold = []
-        above_num = neuron_to_cover_num_each / 2
-        below_num = neuron_to_cover_num_each - above_num
+        above_num = target_neuron_cover_num_each / 2
+        below_num = target_neuron_cover_num_each - above_num
         above_i = 0
         below_i = 0
         for (layer_name, index), value in model_layer_value.items():
@@ -291,6 +307,9 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
 
     return loss_neuron
 
+
+
+# -------------------------------------------------------------------------
 def neuron_scale(loss_neuron):
     loss_neuron_new = []
     loss_sum = K.sum(loss_neuron)
@@ -314,31 +333,51 @@ def neuron_covered(model_layer_times):
     total_neurons = len(model_layer_times)
     return covered_neurons, total_neurons, covered_neurons / float(total_neurons)
 
-
+# 0-1 min-max scaling： 将数据按比例缩放，使之落入一个小的特定区间[0, 1]
 def scale(intermediate_layer_output, rmax=1, rmin=0):
+    # 做broadcasting
     X_std = (intermediate_layer_output - intermediate_layer_output.min()) / (
         intermediate_layer_output.max() - intermediate_layer_output.min())
-    X_scaled = X_std * (rmax - rmin) + rmin
-    return X_scaled
+    X_scaled = X_std * (rmax - rmin) + rmin # 这里，x_scaled = X_std
+    return X_scaled # a list?
 
 
 def update_coverage(input_data, model, model_layer_times, threshold=0):
+    # Extract 已经训练好的 ！！the layers
     layer_names = [layer.name for layer in model.layers if
                    'flatten' not in layer.name and 'input' not in layer.name]
 
-    intermediate_layer_model = Model(inputs=model.input,
-                                     outputs=[model.get_layer(layer_name).output for layer_name in layer_names])
-    intermediate_layer_outputs = intermediate_layer_model.predict(input_data)
+    # build the model with only the layers above， 使用Model class API形式
+    intermediate_layer_model = Model(inputs=model.input, # model.input是原mnist traning data 
+                                     # get_layer根据名称（唯一）或索引值查找layer
+                                     outputs=[model.get_layer(layer_name).output for layer_name in layer_names])# list 嵌套 每层的output（list）
+    # print([model.get_layer(layer_name).output for layer_name in layer_names]) # length 6的list, element即选定layer是nd array
 
+    # 总的predict！：获取 每层单独的intermediate output存在list中！！！ 因为结果分别和threshold比较 判定activation
+    intermediate_layer_outputs = intermediate_layer_model.predict(input_data) # 也是 length 6的list, 即选定layer层数
+    # debug
+    # print(len(intermediate_layer_outputs))
+    
+    #  i = 6 即使[0,5]
+    #  intermediate_layer_output 第i层的output，是nd array(1, X, Y, f)。其中f 是layer的filter 即neuron的数量！！
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
-        scaled = scale(intermediate_layer_output[0])
+        # nd array[0] 等价于[0, :, :, :]: 在axis = 0的轴上选取第一个元素，同时选取axis = 1, 2,3 上的全部元素
+         # 所以[0]等于抹去那个1 得到真正的 (X,Y,f) 的neuron output
+# Note： 统一scale 才能用同一个threshold 来判定activation !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        scaled = scale(intermediate_layer_output[0]) 
+
         # range(scaled.shape[-1])
-        for num_neuron in range(scaled.shape[-1]):
+        # scaled.shape[-1]是 last D of nd array, 正好是 layer的 #(filters)
+# Note: 定义遍历一层的每一个filter 即CNN的neuron, 的结果: 对feature map 取mean！！！
+        for num_neuron in range(scaled.shape[-1]):  # [0, f-1] 个neurons
+            # ... 相当于 :, 每一个filter/neuron 的结果, 等价于 scaled[:,:,num_neuron].
+            # num_neuron 是卷积/maxpooling得到的一层neuron 直接结果: 对feature map 取mean
             if np.mean(scaled[..., num_neuron]) > threshold: #and model_layer_dict[(layer_names[i], num_neuron)] == 0:
-                model_layer_times[(layer_names[i], num_neuron)] += 1
+                model_layer_times[(layer_names[i], num_neuron)] += 1 # 记作 该nueron被cover
 
     return intermediate_layer_outputs
 
+# 和上面的差不多，除了dic存的是value
 def update_coverage_value(input_data, model, model_layer_value):
     layer_names = [layer.name for layer in model.layers if
                    'flatten' not in layer.name and 'input' not in layer.name]

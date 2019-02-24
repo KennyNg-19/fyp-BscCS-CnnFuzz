@@ -14,7 +14,7 @@ from keras import backend as K
 
 import numpy as np
 
-def load_data(path="MNIST_data/mnist.npz"): #得额外加，文件里没有mnist集合
+def load_data(path="MNIST_data/mnist.npz"): # 得额外加，文件里没有mnist集合
     f = np.load(path)
     x_train, y_train = f['x_train'], f['y_train']
     x_test, y_test = f['x_test'], f['y_test']
@@ -53,7 +53,8 @@ def Model1(input_tensor=None, train=False):
         y_test = to_categorical(y_test, nb_classes)
         
         
-    
+        # 实例化 Keras 张量
+        # shape: 一个!!尺寸元组（整数），不体现批量大小!!
         input_tensor = Input(shape=input_shape)
     elif input_tensor is None:
         print('you have to proved input_tensor when testing')
@@ -63,6 +64,9 @@ def Model1(input_tensor=None, train=False):
     
     
     # step1： define the model and layers, 
+    # two main types of models： 1 Sequential model 2 Model class used with the functional API.
+    # 这里用Model class API的写法： 有input tensor(s) and output tensor(s) 即可， 需要的layers 在output中定义
+
     # block1
     # print("in Model1 input_tensor = ",input_tensor)
     x = Convolution2D(4, kernel_size, activation='relu', padding='same', name='block1_conv1')(input_tensor)
@@ -73,13 +77,14 @@ def Model1(input_tensor=None, train=False):
     x = Convolution2D(12, kernel_size, activation='relu', padding='same', name='block2_conv1')(x)
     x = MaxPooling2D(pool_size=(2, 2), name='block2_pool1')(x)
 
-    x = Flatten(name='flatten')(x)
-    x = Dense(nb_classes, name='before_softmax')(x)
-    x = Activation('softmax', name='predictions')(x)
+    x = Flatten(name='flatten')(x) # 输入展平。不影响批量大小---但没有设置下一层，因为
+    # 分开写，方便修改激活函数(dense的activation属性不指定，则不使用激活函数 (即，「线性」激活: a(x) = x))
+    x = Dense(nb_classes, name='before_softmax')(x) # last layer: 全连接层---flatten层 下一层的output size 即neuron数量:  (*, nb_classes)
+    x = Activation('softmax', name='predictions')(x) # 将激活函数应用于输出
 
-    # type: keras.models. 是Sequential()： 因为直接调用API， 输入一个张量，输出也是张量的（但需要我们定义嵌套型的layer结构）
+    # type: keras.models. 是Sequential()： 因为直接调用API， input一个张量，output 也是张量的（但需要我们定义嵌套型的layer结构）
     # 是未训练的model！！！ (weight是初始的， 后面train或者从Model1.h5获取!!!!）
-    model = Model(input_tensor, x) 
+    model = Model(input_tensor, x)  
 
     if train: 
         # step2: compiling, 对学习过程 进行配置
