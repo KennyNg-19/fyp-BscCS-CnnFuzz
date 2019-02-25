@@ -190,7 +190,7 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
 
     # neuron_select_strategy input 允许使用多个strategy: neuron_select_strategy是str !!!
     num_strategy = len([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']]) 
-    target_neuron_cover_num_each = int(target_neuron_cover_num / num_strategy) # 将需要cover的平均给每个strategy
+    target_neuron_cover_num_each = target_neuron_cover_num // num_strategy # 将需要cover的平均给每个strategy
 
     loss_neuron = []
     # initialization for strategies

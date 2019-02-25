@@ -108,20 +108,21 @@ if not os.path.exists(save_dir):
 
 # 开始实验
 print("\n------------------------------- Start --------------------------------\n")
-for i in range(img_num):
+for i in range(img_num): 
 
     start_time = time.process_time()
-    #seed_list
-    img_list = []
-
     
+    # 对于 EVERY original test img in the path!!!
     img_path = os.path.join(img_dir,img_paths[i]) # dir+name 合成single img path, (name 即img_paths[i])
-    print("Input "+ str(i+1) + "/" + str(img_num) + ": " + img_path)
+    print("Test input "+ str(i+1) + "/" + str(img_num) + ": " + img_path)
 
-    tmp_img = preprocess_image(img_path) # function, return a copy of the img in the path, 准备mutate -> gen_img
-    img_list.append(tmp_img)
 
-    orig_img = tmp_img.copy() # 比较mutation结果需要， diff_img = gen_img - orig_img
+    tmp_img = preprocess_image(img_path) # function, return a copy of the img in the path, 准备mutate -> seed_img
+    #该test img 对应的 seed_list
+    seed_img_list = []
+    seed_img_list.append(tmp_img)
+
+    orig_img = tmp_img.copy() # 比较mutation结果需要， diff_img = seed_img - orig_img
 
         
     # to get Label
@@ -129,27 +130,26 @@ for i in range(img_num):
     mannual_label = int(img_name.split('_')[1]) # extract the label exactly from the name
     
 # ----------------------------------------------------------------
-    # 原生img 输入，记下 原生nueron cover情况 
-    # model_layer_times2 ??
+    # 原生test img 输入，记下 的nueron cover情况 在model_layer_times2 中 
     update_coverage(tmp_img, model1, model_layer_times2, threshold)
 
-    while len(img_list) > 0:
-    	# grab the head element
-        gen_img = img_list[0] 
-        img_list.remove(gen_img)
+    while len(seed_img_list) > 0:
+    	# grab the head element，对于每个seed img
+        seed_img = seed_img_list[0] 
+        seed_img_list.remove(seed_img)
 
 
 
 
         #  Optimization 第一部分： 找到 c, c_topk = dnn.predict(Xs)
         # first check if input already induces differences
-        pred1 = model1.predict(gen_img)
+        pred1 = model1.predict(seed_img)
         label1 = np.argmax(pred1[0]) # [0] ??
         label_top5 = np.argsort(pred1[0])[-5:]
         
-        # 记下 gen_img 对应的nueron value和cover 情况 ： 作为 past testing !!!
-        update_coverage_value(gen_img, model1, model_layer_value1)
-        update_coverage(gen_img, model1, model_layer_times1, threshold)
+    # 对于每个seed img仅一次： 记下 未mutate之前 seed_img 对应的nueron value和cover 情况: 作为 past testing !!!
+        update_coverage_value(seed_img, model1, model_layer_value1)
+        update_coverage(seed_img, model1, model_layer_times1, threshold)
 
         orig_label = label1
         orig_pred = pred1
@@ -175,57 +175,60 @@ for i in range(img_num):
 
         # Optimization 目标函数 
         # 第二部分, λ · sum(neurons)
-        # extreme value means the activation value for a neuron can be as high as possible ... 增大第二部分的要求
-        EXTREME_VALUE = False
+        # extreme value means the activation value for a neuron can be as high as possible ... 增大第二部分N coverage的需求
+        EXTREME_VALUE = True
         if EXTREME_VALUE:
-            neuron_to_cover_weight = 2
-        # else by default neuron_to_cover_weight = 0.5
+            neuron_to_cover_weight = 2 # λ
+        # else λ, by default, neuron_to_cover_weight = 0.5
         
         # obj = sum(c_topk) - c + λ · sum(neurons) 
         layer_output += neuron_to_cover_weight * K.sum(loss_neuron) # loss_neuron is a list
 
         # for adversarial image generation
-        final_loss = K.mean(layer_output) # 梯度的目标函数值
+        final_loss = K.mean(layer_output) # compute the mean over all Dimension !! 梯度的目标函数值
 
 
 
 
         # gradient obtained: compute the gradient of the input picture wrt this loss
-        grads = normalize(K.gradients(final_loss, input_tensor)[0])
+        # normalize a tensor by its L2 norm，值在[0,1]之间 ; [0] 降维，去掉第一维度
+        grads = normalize(K.gradients(final_loss, input_tensor)[0]) # input_tensor 是初始seed img
+
 
         grads_tensor_list = [loss_1, loss_2, loss_3, loss_4, loss_5]
         grads_tensor_list.extend(loss_neuron) # extend 加一个list
-        grads_tensor_list.append(grads)
-        # this function returns the loss and grads given the input picture
+        grads_tensor_list.append(grads) 
 
-        iterate = K.function([input_tensor], grads_tensor_list)
+        # Keras.backend.function  实例化一个函数
+        # 注意 outputs` of a TensorFlow backend function should be a list or tuple.
+        # this function returns the loss and grads given the input picture [input_tensor](Tensor -> list type) 只是个传参！！
+        iterate = K.function([input_tensor], grads_tensor_list) 
 
 
-
+        # record No. of each adversarial examples 
         the_input_adversarial_num = 0
         # we run gradient ascent for 3 steps
-        for iters in range(iteration_times): # 1 epoch, 最多一个 adversrial generation ≤ iteration_times 输入超参epoch
+        # in 1 epoch, 最多一个 adversrial generation ?? 感觉不符paper说的， times越大 perturb加的越大， adversrial质量越差 
+        # 还是 每个seed  最多一个 adversrial, 找到就break?
+        for iters in range(iteration_times): 
 
-            loss_neuron_list = iterate([gen_img])
+            loss_neuron_list = iterate([seed_img])
 
             perturb = loss_neuron_list[-1] * learning_step
 
             # 生成 mutated x' 完毕
-            gen_img += perturb
+            seed_img += perturb
 
 
             # measure 1: improvement on coverage
             # previous accumulated neuron coverage
-            previous_coverage = neuron_covered(model_layer_times1)[2]
-            pred1 = model1.predict(gen_img)
-            label1 = np.argmax(pred1[0])
-
-            #  update cov_tracker
-            update_coverage(gen_img, model1, model_layer_times1, threshold) # for seed selection
-            current_coverage = neuron_covered(model_layer_times1)[2]
+            previous_coverage = neuron_covered(model_layer_times1)[2] # 获取未mutate之前 seed_img 对应的nueron coverage
+            #  update cov_tracker，记下 mutate之后, neuron coverage
+            update_coverage(seed_img, model1, model_layer_times1, threshold) # coverage for seed img
+            current_coverage = neuron_covered(model_layer_times1)[2] # tuple的第三位 float(covered_neurons/total_neurons)
 
             # measure 2: l2 distance             
-            diff_img = gen_img - orig_img
+            diff_img = seed_img - orig_img
             L2_norm = np.linalg.norm(diff_img)
             orig_L2_norm = np.linalg.norm(orig_img)
             perturb_adversial = L2_norm / orig_L2_norm
@@ -233,33 +236,42 @@ for i in range(img_num):
 
             # 检验效果: if coverage improved by x′ is desired and l2_distance is small
             if current_coverage - previous_coverage > 0.01 / (i + 1) and perturb_adversial < 0.02:
-                img_list.append(gen_img)
+                print("current_coverage: " + str(current_coverage) +", previous_coverage: " + str(previous_coverage))
+                seed_img_list.append(seed_img)
                 # print('coverage diff = ', current_coverage - previous_coverage, 'perturb_adversial = ', perturb_adversial)
+            else:
+                print("not a sufficient perturb")
 
-            if label1 != orig_label:
-                update_coverage(gen_img, model1, model_layer_times2, threshold)
+            # 检验分类效果 寻找adversarial
+            pred1 = model1.predict(seed_img)
+            label1 = np.argmax(pred1[0])
+            if label1 != orig_label: # 该test input成功找到了 adversarial, 放入NN更新overall coverage值??
+                update_coverage(seed_img, model1, model_layer_times2, threshold)
 
                 total_norm += L2_norm
-
                 total_perturb_adversial += perturb_adversial
 
                 # print('L2 norm : ' + str(L2_norm))
                 # print('ratio perturb = ', perturb_adversial)
 
-                gen_img_tmp = gen_img.copy()
-
-                gen_img_deprocessed = deprocess_image(gen_img_tmp)
+                # 还原高纬度数据->生成图片
+                seed_img_tmp = seed_img.copy()
+                seed_img_deprocessed = deprocess_image(seed_img_tmp)
                 # use timestamp to name the generated adversial input
                 save_img = save_dir + img_name + '_' + str(get_signature()) + '.png' 
+                imwrite(save_img, seed_img_deprocessed)
 
-                imwrite(save_img, gen_img_deprocessed)
+                print('Find %dth adversarial: CN percentage %.3f for %d neurons' 
+                    % (the_input_adversarial_num+1,(neuron_covered(model_layer_times2)[2]), len(model_layer_times2)))
 
                 the_input_adversarial_num += 1
                 adversial_num += 1
+                # 不break?
+                # break
 
     end_time = time.process_time()
 
-    print('covered neurons percentage %.3f for %d neurons'
+    print('For this test input, covered neurons percentage %.3f for %d neurons'
       % ((neuron_covered(model_layer_times2)[2]), len(model_layer_times2)))
     print('In %d epochs: %d adversarial examples' % (iteration_times, the_input_adversarial_num))
 
