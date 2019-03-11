@@ -102,7 +102,7 @@ def Model1(input_tensor=None, train=False):
         print('Overall Test accuracy:', score[1])
     else: # use the pre-trained weights
         model.load_weights('./Model1.h5')
-        print('Model1 loaded')
+        print('Model1:LeNet-1  loaded')
 
     # K.clear_session()
 

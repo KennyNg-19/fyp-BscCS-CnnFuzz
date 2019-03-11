@@ -77,7 +77,7 @@ adversial_num = 0
 
 total_perturb_adversial = 0
 
-for i in xrange(img_num):
+for i in range(img_num):
 
     start_time = time.clock()
 
@@ -154,7 +154,7 @@ for i in xrange(img_num):
         iterate = K.function([input_tensor], grads_tensor_list)
 
         # we run gradient ascent for some steps
-        for iters in xrange(iteration_times):
+        for iters in range(iteration_times):
 
             loss_neuron_list = iterate([gen_img])
 

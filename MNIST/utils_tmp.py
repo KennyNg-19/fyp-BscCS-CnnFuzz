@@ -4,6 +4,7 @@ import random
 from collections import defaultdict
 
 import numpy as np
+from PIL import Image
 from datetime import datetime
 from keras import backend as K # 使用抽象 Keras 后端编写新代码
 # 如果你希望你编写的 Keras 模块与 Theano (th) 和 TensorFlow (tf) 兼容，则必须通过抽象 Keras 后端 API 来编写它们。
@@ -190,7 +191,7 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
 
     # neuron_select_strategy input 允许使用多个strategy: neuron_select_strategy是str !!!
     num_strategy = len([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']]) 
-    target_neuron_cover_num_each = target_neuron_cover_num // num_strategy # 将需要cover的平均给每个strategy
+    target_neuron_cover_num_each = int(target_neuron_cover_num / num_strategy) # 将需要cover的平均给每个strategy
 
     loss_neuron = []
     # initialization for strategies

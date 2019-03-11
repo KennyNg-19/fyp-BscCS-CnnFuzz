@@ -32,11 +32,11 @@ generate adversarial examples for ImageNet
 cd ImageNet
 python gen_diff.py [2] 0.25 10 0602 3 vgg16
 #meanings of arguments
-#python gen_diff.py 
+#python gen_diff.py
 [2] -> the list of neuron selection strategies
 0.25 -> the activation threshold of a neuron
 10 -> the number of neurons selected to cover
-0602 -> the folder holding the adversarial examples generated
+0.5 -> the hyperparameter lambda to balance the two objectives: higher, more NC; lower, more adversarial outputs
 3 -> the number of times for mutation on each seed
 vgg16 -> the DL model under test
 ```
@@ -44,6 +44,6 @@ vgg16 -> the DL model under test
 generate adversarial examples for MNIST
 ```
 cd MNIST
-python gen_diff.py [2] 0.5 5 0602 5 model1
+python gen_diff.py [2] 0.5 5 3 0.5 model1
 #meanings of arguments are the same as above
 ```

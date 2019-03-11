@@ -125,7 +125,7 @@ def neuron_to_cover(not_covered,model_layer_dict):
 def random_strategy(model,model_layer_times, neuron_to_cover_num):
     loss_neuron = []
     not_covered = [(layer_name, index) for (layer_name, index), v in model_layer_times.items() if v == 0]
-    for _ in xrange(neuron_to_cover_num):
+    for _ in range(neuron_to_cover_num):
         layer_name, index = neuron_to_cover(not_covered, model_layer_times)
         loss00_neuron = K.mean(model.get_layer(layer_name).output[..., index])
         # if loss_neuron == 0:
@@ -166,7 +166,7 @@ def neuron_selection(model, model_layer_times, model_layer_value, neuron_select_
         return random_strategy(model, model_layer_times, neuron_to_cover_num)
 
     num_strategy = len([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']])
-    neuron_to_cover_num_each = neuron_to_cover_num / num_strategy
+    neuron_to_cover_num_each = neuron_to_cover_num // num_strategy
 
     loss_neuron = []
     # initialization for strategies
@@ -297,8 +297,8 @@ def update_coverage(input_data, model, model_layer_times, threshold=0):
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         scaled = scale(intermediate_layer_output[0])
-        # xrange(scaled.shape[-1])
-        for num_neuron in xrange(scaled.shape[-1]):
+        # range(scaled.shape[-1])
+        for num_neuron in range(scaled.shape[-1]):
             if np.mean(scaled[..., num_neuron]) > threshold: #and model_layer_dict[(layer_names[i], num_neuron)] == 0:
                 model_layer_times[(layer_names[i], num_neuron)] += 1
 
@@ -314,8 +314,8 @@ def update_coverage_value(input_data, model, model_layer_value):
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         scaled = scale(intermediate_layer_output[0])
-        # xrange(scaled.shape[-1])
-        for num_neuron in xrange(scaled.shape[-1]):
+        # range(scaled.shape[-1])
+        for num_neuron in range(scaled.shape[-1]):
             model_layer_value[(layer_names[i], num_neuron)] = np.mean(scaled[..., num_neuron])
 
     return intermediate_layer_outputs
@@ -332,8 +332,8 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0):
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         scaled = scale(intermediate_layer_output[0])
-        # xrange(scaled.shape[-1])
-        for num_neuron in xrange(scaled.shape[-1]):
+        # range(scaled.shape[-1])
+        for num_neuron in range(scaled.shape[-1]):
             if np.mean(scaled[..., num_neuron]) > threshold and not model_layer_dict[(layer_names[i], num_neuron)]:
                 model_layer_dict[(layer_names[i], num_neuron)] = True
 
