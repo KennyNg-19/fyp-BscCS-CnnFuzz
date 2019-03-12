@@ -22,6 +22,7 @@ def load_data(path="MNIST_data/mnist.npz"): # 得额外加，文件里没有mnis
     return (x_train, y_train), (x_test, y_test)
 
 def Model1(input_tensor=None, train=False):
+    print("-------------------Testing on LeNet-1(52 neurons)---------------------")
     nb_classes = 10
     # convolution kernel size
     kernel_size = (5, 5)
@@ -60,13 +61,13 @@ def Model1(input_tensor=None, train=False):
         print('you have to proved input_tensor when testing')
         exit()
     
-    
+    print("in LeNet-1 input_tensor = ",input_tensor)
     
     
     # step1： define the model and layers, 
     # two main types of models： 1 Sequential model 2 Model class used with the functional API.
     # 这里用Model class API的写法： 有input tensor(s) and output tensor(s) 即可， 需要的layers 在output中定义
-
+    
     # block1
     # print("in Model1 input_tensor = ",input_tensor)
     x = Convolution2D(4, kernel_size, activation='relu', padding='same', name='block1_conv1')(input_tensor)

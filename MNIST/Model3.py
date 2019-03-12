@@ -13,6 +13,7 @@ from keras.utils import to_categorical
 
 
 def Model3(input_tensor=None, train=False):
+    print("-------------------Testing on LeNet-5(268 neurons)---------------------")
     nb_classes = 10
     # convolution kernel size
     kernel_size = (5, 5)
@@ -44,7 +45,9 @@ def Model3(input_tensor=None, train=False):
     elif input_tensor is None:
         print('you have to proved input_tensor when testing')
         exit()
-
+    
+    print("in LeNet-5 input_tensor = ",input_tensor)
+    
     # block1
     x = Convolution2D(6, kernel_size, activation='relu', padding='same', name='block1_conv1')(input_tensor)
     x = MaxPooling2D(pool_size=(2, 2), name='block1_pool1')(x)
@@ -75,7 +78,7 @@ def Model3(input_tensor=None, train=False):
         print('Overall Test accuracy:', score[1])
     else:
         model.load_weights('./Model3.h5')
-        print('LeNet-5 loaded')
+        print('Model3: LeNet-5 loaded')
 
     return model
 

@@ -69,7 +69,8 @@ img_names = [img for img in os.listdir(img_dir) if img.endswith(".png")] # retur
 img_num = len(img_names)
 
 # e.g.[0,1,2] None for neurons not covered, 0 for covered often, 1 for covered rarely, 2 for high weights
-neuron_select_strategy = sys.argv[1]
+neuron_select_strategy = sys.argv[1] # str，准备用for loop来split
+print("\nNeuron Selection Strategies: " + str([x for x in neuron_select_strategy if x in ['0', '1', '2', '3']]) + "\n")
 threshold = float(sys.argv[2])
 target_neuron_cover_num = int(sys.argv[3])
 # subdir = sys.argv[4] # where to store the output
