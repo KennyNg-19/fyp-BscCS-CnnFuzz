@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# cmd with 7 params: python imrpved_method.py 2 0.25 30 epoch_num lambda sec_num [4123]
+# cmd with 7 params: python existing_method.py 2 0.25 30 3 5 4 [4123]
 #                                        model_No(1/2/3)
 
 # Basic setup & Import related modules

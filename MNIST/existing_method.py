@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# cmd with 7 params: python existing_method.py 2 0.25 30 epoch_num lambda sec_num [4123]
+# cmd with 7 params: python existing_method.py 2 0.25 30 3 5 4 [4123]
 #                                         model_No(1/2/3)
 
 from __future__ import print_function
@@ -44,6 +44,8 @@ elif model_name == '3':
 else:
     print("no model!!")
     os._exit(0)
+
+# model.summary()
 
 print("------------------------Run existing testing method for MNIST-------------------------")
 # 都是 deafult dict
