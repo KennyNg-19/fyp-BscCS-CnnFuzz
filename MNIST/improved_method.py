@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# cmd with 7 params: python existing_method.py 2 0.25 30 3 5 4 [4123]
+# cmd with 7 params: python improved_method.py 2 0.25 30 3 5 4 [4123] 9
 #                                        model_No(1/2/3)
 
 # Basic setup & Import related modules
@@ -150,19 +150,6 @@ model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name)
 k_section_neurons_num = len(model_neuron_values)
 
 
-# dict.value： multiple values in a list, 0 / 1+
-def init_multisection_coverage_value(model, multisection_num):
-    neurons_multisection_coverage_values = defaultdict(float)
-    for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
-        if 'flatten' in layer.name or 'input' in layer.name:
-            continue
-        # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-
-            neurons_multisection_coverage_values[(layer.name, index)] = [0] * multisection_num # [0,0,0,....]
-    return neurons_multisection_coverage_values
-
 multisection_num = int(sys.argv[6])
 k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
 total_section_num = k_section_neurons_num * multisection_num # constant, of all neurons' sections
@@ -216,7 +203,7 @@ for i in range(test_img_num):
     img_list = []
 
     img_name = os.path.join(img_dir,img_names[i]) # dir+name 合成single img path, (name 即img_names[i])
-    if (i + 1) % 10 == 0:
+    if (i + 1) % 5 == 0:
         print("Input "+ str(i+1) + "/" + str(test_img_num) + ": " + img_name)
 
     tmp_img = preprocess_image(img_name) # function, return a copy of the img in the path, 准备mutate -> gen_img
@@ -245,7 +232,7 @@ for i in range(test_img_num):
         # first check if input already induces differences
         orig_pred = model.predict(gen_img)
         orig_pred_label = np.argmax(orig_pred[0])
-        label_top5 = np.argsort(orig_pred[0])[-5:]
+        
 
         # 记下 gen_img 对应的nueron value和cover 情况 ： model_layer_times1是 作为 past testing !!!
         update_coverage_value(gen_img, model, model_layer_value1)
@@ -258,16 +245,18 @@ for i in range(test_img_num):
             # print("----------------For a seed img %d: %d, model predicts %d, wrong------------" \
             #       % (i+1, right_label, orig_pred_label))
 
+        top_k_class = int(sys.argv[8])
+        label_topk = np.argsort(orig_pred[0])[-top_k_class:]
 
-        # Tensor: (?,) first dimension is not fixed in the graph and it can vary between run calls
         loss_1 = K.mean(model.get_layer('before_softmax').output[..., orig_pred_label])
-        loss_2 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-2]])
-        loss_3 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-3]])
-        loss_4 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-4]])
-        loss_5 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-5]])
+        loss = 0
+        # Tensor: (?,) first dimension is not fixed in the graph and it can vary between run calls
+        for i_class in range(2, top_k_class + 1):
+            loss += K.mean(model.get_layer('before_softmax').output[..., label_topk[-i_class]])
+
 
         # Optimization 第一部分，sum(c_topk) - c， hyper param: predict_weight = 0.5,
-        layer_output = (predict_weight * (loss_2 + loss_3 + loss_4 + loss_5) - loss_1)
+        layer_output = (predict_weight * loss - loss_1)
 
 
 
@@ -293,7 +282,7 @@ for i in range(test_img_num):
 
     # ---------------------------------------------------grads = @obj/@xs--------------------------------------------------------------
     # 1.定义 gradients backend函数: 求损失函数关于变量的导数，也就是网络的反向计算过程。
-        grads_tensor_list = [loss_1, loss_2, loss_3, loss_4, loss_5]
+        grads_tensor_list = [loss_1, loss]
         grads_tensor_list.extend(target_neurons_outputs) # extend: a list
 
         # K.gradients（loss，vars）： 用于求loss关于vars 的导数（梯度）(若为vars tensor，则是求每个var的偏导数,输出也是gradients tensor)----通过tensorflow的tf.gradients()
@@ -381,7 +370,7 @@ for i in range(test_img_num):
                 # print("===========Find an adversrial, break============")
                 break
 
-    if (i + 1) % 10 == 0:
+    if (i + 1) % 5 == 0:
         print('NC: %d/%d <=> %.3f' % (len([v for v in model_layer_times2.values() if v > 0]), \
         total_neuron_num, (neuron_covered(model_layer_times2)[2])))
 
@@ -411,7 +400,7 @@ for i in range(test_img_num):
 
 print('\n--------------------------Summary-----------------------------')
 print("wrong prediction(cross decision boundary) %d/%d <=> %.3f" % (wrong_predi, seed_num, wrong_predi/seed_num))
-print('adversarial found JUST in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, test_img_num, find_adv_one_epoch/test_img_num))
+# print('adversarial found JUST in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, test_img_num, find_adv_one_epoch/test_img_num))
 print('covered neurons percentage %.3f for %d neurons'
       % ((neuron_covered(model_layer_times2)[2]), total_neuron_num))
 covered_sections_num = 0

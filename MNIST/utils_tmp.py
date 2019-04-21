@@ -138,7 +138,30 @@ def init_coverage_value(model):
     init_neuron_coverage(model, model_layer_value)
     return model_layer_value
 
+def init_neuron_values(model):
+    model_neuron_values = defaultdict(float)
+    for layer in model.layers:
+        # 对于不经过activation的layer, 不考虑其coverage
+        if 'flatten' in layer.name or 'input' in layer.name:
+            continue
+        # 对于经过activation的layer
+        for index in range(layer.output_shape[-1]): # 输出张量 last D
+            # key: 'l层 第n个 Neuron' 整个tuple(layer.name, index) 代表 Neuron, value: (max, min)
+            model_neuron_values[(layer.name, index)] = [0, 0]
+    return model_neuron_values
 
+# dict.value： multiple values in a list, 0 / 1+
+def init_multisection_coverage_value(model, multisection_num):
+    neurons_multisection_coverage_values = defaultdict(float)
+    for layer in model.layers:
+        # 对于不经过activation的layer, 不考虑其coverage
+        if 'flatten' in layer.name or 'input' in layer.name:
+            continue
+        # 对于经过activation的layer
+        for index in range(layer.output_shape[-1]): # 输出张量 last D
+
+            neurons_multisection_coverage_values[(layer.name, index)] = [0] * multisection_num # [0,0,0,....]
+    return neurons_multisection_coverage_values
 
 def init_storage_dir(save_dir):
     if os.path.exists(save_dir):
@@ -507,17 +530,6 @@ def update_neuron_value(input_data, model, model_neuron_values):
                 pass
     return intermediate_layer_outputs
 
-def init_neuron_values(model):
-    model_neuron_values = defaultdict(float)
-    for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
-        if 'flatten' in layer.name or 'input' in layer.name:
-            continue
-        # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-            # key: 'l层 第n个 Neuron' 整个tuple(layer.name, index) 代表 Neuron, value: (max, min)
-            model_neuron_values[(layer.name, index)] = [0, 0]
-    return model_neuron_values
 
 def update_coverage(input_data, model, model_layer_times, model_neuron_values, multisection_coverage, multisection_num,\
 upper_corner_coverage, lower_corner_coverage, threshold = 0):

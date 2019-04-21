@@ -60,18 +60,6 @@ total_neuron_num = len(model_layer_times1) # constant
 model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name) 
 k_section_neurons_num = len(model_neuron_values)
 
-# dict.value： multiple values in a list, 0 / 1+
-def init_multisection_coverage_value(model, multisection_num):
-    neurons_multisection_coverage_values = defaultdict(float)
-    for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
-        if 'flatten' in layer.name or 'input' in layer.name:
-            continue
-        # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-
-            neurons_multisection_coverage_values[(layer.name, index)] = [0] * multisection_num # [0,0,0,....]
-    return neurons_multisection_coverage_values
 
 multisection_num = int(sys.argv[6])
 k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
