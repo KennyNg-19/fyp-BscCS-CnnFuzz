@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import keras
+from keras.preprocessing.image import ImageDataGenerator
 
 import random
 import math
@@ -74,6 +75,37 @@ class SourceMutationOperators():
 
 # mutation_ratio 只是决定变化的量, 在这一行 number_of_XXX_datas = math.floor(number_of_train_data * mutation_ratio)
 #  np.random.permutation 打乱顺序
+
+    #  different configurations: featurewise_center, zca_whitening, rotation_range, horizontal_flip=True, vertical_flip=True)
+    def aug_mut(self, train_dataset, model, mutation_ratio, mut_name):
+        deep_copied_model = self.model_utils.model_copy(model, 'datagen_' + mut_name)
+        if mut_name == 'whi': # ZCA white
+            datagen = ImageDataGenerator(zca_whitening=True)
+        elif mut_name == 'rot': # rotation
+            datagen = ImageDataGenerator(rotation_range=45)
+        elif mut_name == 'sh': # shear
+            datagen = ImageDataGenerator(shear_range=35)
+        elif mut_name == 'fl': # flip
+            datagen = ImageDataGenerator(horizontal_flip=True, vertical_flip=True)
+        # elif mut_name == ''
+
+        train_datas, train_labels = train_dataset
+        self.check.mutation_ratio_range_check(mutation_ratio)
+        self.check.training_dataset_consistent_length_check(train_datas, train_labels)
+
+        # select a portion of data and reproduce
+        number_of_train_data = len(train_datas)
+        number_of_aug = math.floor(number_of_train_data * mutation_ratio)
+        print("augment datagen modified %d training datasets, totally %d" % (number_of_aug, number_of_train_data))
+
+        aug_train_datas = train_datas[:number_of_aug]
+        aug_train_labels = train_labels[:number_of_aug]
+        # fit parameters from data
+        datagen.fit(aug_train_datas)
+        # configure batch size and retrieve one batch of images
+        for datas_batch, labels_batch in datagen.flow(aug_train_datas, aug_train_labels, batch_size=number_of_aug):
+            break # just gain the batches
+        return (datas_batch, labels_batch), deep_copied_model
 
     #  Data repetition: mutate_ratio对acc 影响很小
     def DR_mut(self, train_dataset, model, mutation_ratio):
@@ -171,7 +203,7 @@ class SourceMutationOperators():
 
         number_of_train_data = len(NP_train_datas)
         number_of_noise_perturbs = math.floor(number_of_train_data * mutation_ratio) # a specific amount of samples is chosen
-        print("shuffle %d training datasets/%d datasets totally with STD %f" % (number_of_noise_perturbs, number_of_train_data, STD))
+        print("noise perturb %d training datasets/%d datasets totally with STD %f" % (number_of_noise_perturbs, number_of_train_data, STD))
 
         shuffled_indexes = np.random.permutation(number_of_train_data) # a list of INDEX!! Parameters: int or array_like If x is an integer, randomly permute np.arange(x).
         shuffled_indexes_to_add_noise = shuffled_indexes[:number_of_noise_perturbs] # a list of index!!! 取打乱顺序后的，0-ratio决定的部分

@@ -1,4 +1,4 @@
-???img:
+﻿???img:
 ?set?index,????
 
 random shuffle datasets and lebalsets 要保持对应性！:
@@ -8,6 +8,7 @@ shuffle?? ?????,使用uniform_shuffle函数
 numpy.random.permutation(x): 别被名字所欺骗，是random排序
 Randomly permute a sequence, or return a permuted range.
 
+'tuple' object (里的element) does not support item assignment: 用list就好
 
 ***
 生成的test case中digit 和correct的label对不上(在文件名中需要)
@@ -30,5 +31,5 @@ def set_globvar_to_one(): # global var不传参!!
 test集合里可能在linux中会有其他“隐藏文件” 类型不一，使程序崩溃: 使用filter功能
 img_paths = [img for img in os.listdir(img_dir) if img.endswith(".png")]
 
-# def run_operator(model, mutated_model, train_datas, train_labels, mutated_datas, mutated_results)
-#         def compare_results( test_datas, test_labels, trained_mutated_model):
+**
+'float、其他类型' object is not subscriptable 说明你对一个了一个float类型 进行了遍历:如range()或者 indexing [1]
