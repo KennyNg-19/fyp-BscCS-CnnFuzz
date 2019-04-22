@@ -1,8 +1,8 @@
 
 # coding: utf-8
 
-# cmd with 7 params: python improved_method.py 2 0.25 30 3 5 4 [4123] 9
-#                                        model_No(1/2/3)
+# cmd with 7 params: python improved_method.py 2 0.2 30 3 5 4 [4123] 9
+#  0.2 is good for LeNet-1               model_No(1/2/3)
 
 # Basic setup & Import related modules
 import tensorflow as tf
@@ -19,6 +19,7 @@ from cv2 import imwrite
 from datetime import datetime
 
 # import utils Class
+from random import shuffle
 from utils_tmp import *
 import utils, network, source_mut_operators
 # utils = utils.GeneralUtils()
@@ -50,34 +51,23 @@ else:
 
 
 # load model
-
 from keras.layers import Input
 from keras.models import load_model
-# init. tensor input shape
 
 model_name = sys.argv[1]
 
-# while True:
-#     model_name = input("Input a model type among 1, 2, 3:  ")
-#     if model_name not in ["1", "2", "3"]:
-#         print("Sorry, it is invalid...")
-#         continue
-#     else:
 if model_name == '1':
     model_name = "Model1"
     model = load_model('./Model1.h5')
-    print('LeNet-1 loaded')
-    print("-------------------Testing on LeNet-1(52 neurons)---------------------")
+    print('LeNet-1(52 neurons) loaded')
 elif model_name == '2':
     model_name = "Model2"
     model = load_model('./Model2.h5')
-    print('LeNet-4 loaded')
-    print("-------------------Testing on LeNet-4(148 neurons)---------------------")
+    print('LeNet-4(148 neurons) loaded')
 elif model_name == '3':
     model_name = "Model3"
     model = load_model('./Model3.h5')
-    print('LeNet-5 loaded')
-    print("-------------------Testing on LeNet-5(268 neurons)---------------------")
+    print('LeNet-5(268 neurons) loaded')
 else:
     print("no model!!")
 
@@ -125,45 +115,7 @@ if run_more_mutation:
 # =============================================================================
 print("\n------------------------Run improved testing method for MNIST-------------------------")
 
-
-# load multiple models sharing same input tensor
-K.set_learning_phase(0)
-
-# e.g.[0,1,2] None for neurons not covered, 0 for covered often, 1 for covered rarely, 2 for high weights
-threshold = float(sys.argv[2])
-target_neuron_cover_num = int(sys.argv[3])
-iteration_times = int(sys.argv[4]) # 即 epoch
-balance_lambda = float(sys.argv[5]) # Optimization 第二部分的λ 协调两部分: 越大，则以Neuron coverage为目标；越小，则以more adversrial为目标
-neuron_select_strategy = sys.argv[7] # str，准备用for loop来split
-print("\nNeuron Selection Strategies " + str([str(int(x)) for x in neuron_select_strategy if x in ['1', '2', '3', '4']]))
-
-# 都是 deafult dict
-model_layer_times1 = init_coverage_times(model)  # dict for coverage times of each neuron covered 次数
-model_layer_times2 = init_coverage_times(model)  # 和上一行 初始化保持一致 直到 update when new image and adversarial images found
-
-total_neuron_num = len(model_layer_times1) # constant
-
-model_layer_value1 = init_coverage_value(model) #
-
-
-# a dict for each neuron' ranges
-model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name)
-k_section_neurons_num = len(model_neuron_values)
-
-
-multisection_num = int(sys.argv[6])
-k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
-total_section_num = k_section_neurons_num * multisection_num # constant, of all neurons' sections
-
-upper_corner_coverage = init_coverage_times(model)
-lower_corner_coverage = init_coverage_times(model)
-
-
-
-
-# 预设实验参数 包括 inputs
-from random import shuffle
-
+# set input dir: seeds
 img_dir = './seeds_improved_method/'
 img_names = [img for img in os.listdir(img_dir) if img.endswith(".png")] # return a list containing the NAMEs of only the img files in that dir path.
 total_img_num = len(img_names)
@@ -177,7 +129,40 @@ while True:
         break
 img_names = img_names[:seeds_num]
 
+# set output dir: generated adversrials
+save_dir = './gen_adversarial_improved_method/'
+init_storage_dir(save_dir)
 
+# set metrics
+# metric 1: basic neuron coverage 
+model_layer_times1 = init_coverage_times(model)  # a dict for coverage times of each neuron covered 
+model_layer_times2 = init_coverage_times(model)  # same as above, but update when new image and adversarial images found
+
+model_layer_value1 = init_coverage_value(model) #
+
+total_neuron_num = len(model_layer_times1) # constant
+
+# metric 2: k-section coverage
+multisection_num = int(sys.argv[6])
+# a dict for each neuron outputs' ranges
+model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name) 
+k_section_neurons_num = len(model_neuron_values)
+k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
+total_section_num = k_section_neurons_num * multisection_num # constant, of all neurons' sections
+
+
+# metric 3: corner coverage
+upper_corner_coverage = init_coverage_times(model)
+lower_corner_coverage = init_coverage_times(model)
+
+
+# set hyper params
+threshold = float(sys.argv[2]) # activation threshold
+target_neuron_cover_num = int(sys.argv[3]) # neurons to cover
+iteration_times = int(sys.argv[4]) # 即 epoch
+balance_lambda = float(sys.argv[5]) # Optimization λ, greater then focus on Neuron coverage; lese, on adversrial example
+neuron_select_strategy = sys.argv[7] # among [1 2 3 4], pick one, or more
+print("\nNeuron Selection Strategies " + str([str(int(x)) for x in neuron_select_strategy if x in ['1', '2', '3', '4']]))
 
 predict_weight = 0.5 # Optimization 第一部分的weight
 learning_step = 0.02
@@ -187,12 +172,14 @@ total_norm = 0
 total_adversrial_num = 0
 total_perturb_adversrial = 0
 
-# 设置 output 选定 storage dir
-save_dir = './gen_adversarial_improved_method/'
-init_storage_dir(save_dir)
-
 wrong_predi = 0
 find_adv_one_epoch = 0
+
+# =============================================================================
+# =============================================================================
+# =============================================================================
+# =============================================================================
+# =============================================================================
 print("\n------------------------------- Start Fuzzing(%d filtered seeds) --------------------------------" % seeds_num)
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
@@ -203,7 +190,7 @@ for i in range(seeds_num):
     img_list = []
 
     img_name = os.path.join(img_dir,img_names[i]) # dir+name 合成single img path, (name 即img_names[i])
-    if (i + 1) % 5 == 0:
+    if (i + 1) % 10 == 0:
         print("Input "+ str(i+1) + "/" + str(seeds_num) + ": " + img_name)
 
     tmp_img = preprocess_image(img_name) # function, return a copy of the img in the path, 准备mutate -> gen_img
@@ -380,7 +367,7 @@ for i in range(seeds_num):
                 # print("===========Find an adversrial, break============")
                 break
 
-    if (i + 1) % 5 == 0:
+    if (i + 1) % 10 == 0:
         print('NC: %d/%d <=> %.3f' % (len([v for v in model_layer_times2.values() if v > 0]), \
         total_neuron_num, (neuron_covered(model_layer_times2)[2])))
 
@@ -396,8 +383,8 @@ for i in range(seeds_num):
 
         print('UpperCorner coverage: %d/%d <=> %.3f' % (len([v for v in upper_corner_coverage.values() if v > 0]), \
         k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])/k_section_neurons_num))
-        print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
-        k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
+        # print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
+        # k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
         print("wrong predict %d/%d <=> %.3f" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
         print("No. adversarial: " + str(total_adversrial_num))
         # print('In %d epochs: %d adversarial examples' % (iteration_times, the_input_adversarial_num))
@@ -422,8 +409,8 @@ print('%d-section coverage: %d/%d <=> %.3f' % (multisection_num, covered_section
 covered_sections_num/total_section_num))
 print('UpperCorner coverage: %d/%d <=> %.3f' % (len([v for v in upper_corner_coverage.values() if v > 0]), \
 k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])/k_section_neurons_num))
-print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
-k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
+# print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
+# k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
 try:
     print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, seeds_num))
     print('average norm = %.3f ' % (total_norm / total_adversrial_num))
