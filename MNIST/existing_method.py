@@ -46,7 +46,8 @@ random.shuffle(img_names)
 seeds_num = len(img_names)
 
 # set output dir: generated adversrials
-save_dir = './gen_adversarial_existing_method/'
+save_dir = './gen_adversarial_existing_method/' + model_name + "_" + sys.argv[2] + "_" + sys.argv[3] + "_" \
+                + sys.argv[6] + "_" + sys.argv[7] + "_" + sys.argv[8] + "/"
 init_storage_dir(save_dir)
 
 # set metrics
@@ -89,6 +90,7 @@ total_time = 0
 total_norm = 0
 total_adversrial_num = 0
 total_perturb_adversrial = 0
+total_adver_iterations = 0
 
 wrong_predi = 0
 find_adv_one_epoch = 0
@@ -199,7 +201,6 @@ for i in range(seeds_num):
         # this function returns the loss and grads given the input picture
         iterate = K.function([model.input], grads_tensor_list)
 
-        the_input_adversarial_num = 0
         # 3. run gradient ascent
         for iters in range(iteration_times): # iteration_times, a limit on the iteration time
 
@@ -215,7 +216,8 @@ for i in range(seeds_num):
             # measure 1: improvement on coverage
             # previous accumulated neuron coverage
             previous_coverage = neuron_covered(model_layer_times1)[2]
-            advers_pred = model.predict(gen_img) # score
+            advers_pred = model.predict(gen_img) # scores
+            advers_max_score = max(advers_pred[0]) # the score of the class with highest probability  
             advers_pred_label = np.argmax(advers_pred[0]) 
             
             #  update cov_tracker
@@ -244,7 +246,6 @@ for i in range(seeds_num):
                     find_adv_one_epoch += 1
 
                 total_adversrial_num += 1
-                the_input_adversarial_num += 1
 
                 update_coverage(gen_img, model, model_layer_times2, model_neuron_values, k_multisection_coverage, \
             multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
@@ -258,7 +259,7 @@ for i in range(seeds_num):
                 gen_img_deprocessed = deprocess_image(gen_img_tmp)
                 # write generated img to disk
                 save_img_name = save_dir + str(total_adversrial_num) + model_name + "_" + \
-                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '.png'
+                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + "_" + "%.2f" % advers_max_score +'.png'
 
                 cv2.imwrite(save_img_name, gen_img_deprocessed)
 
@@ -272,7 +273,7 @@ for i in range(seeds_num):
                 
                 # print("===========Find an adversrial, break============")
                 break
-
+        total_adver_iterations += iters
 
     if (i + 1) % 10 == 0:    
         print('NC: %d/%d <=> %.3f, ' % (len([v for v in model_layer_times2.values() if v > 0]),
@@ -280,7 +281,7 @@ for i in range(seeds_num):
         "\ttotal adversarial generated: " + str(total_adversrial_num))
         print("incorrect predict %d/%d <=> %.2f" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
     
-    if (i + 1) % 30 == 0:
+    if (i + 1) % 60 == 0:
         covered_sections_num = 0
         for neuron_sections in k_multisection_coverage.values(): # each layer: {[0.0.0.0...], [0.0.0.0...], ...}
             for key in neuron_sections: # each neuron： neuron_sections [0.0.0.0...]
@@ -320,9 +321,11 @@ k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])
 # k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
 try:
     print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, seeds_num))
-    print('average norm = %.3f ' % (total_norm / total_adversrial_num))
+    print('avg norm = %.3f ' % (total_norm / total_adversrial_num))
     # print('average time of generating an adversarial input %.3f s' % (total_time / total_adversrial_num))
-    print('average perb adversrial = %.4f' % (total_perturb_adversrial / total_adversrial_num))
+    print('avg perb per adversrial = %.4f' % (total_perturb_adversrial / total_adversrial_num))
+    print('total mutation iterations for these adversrials: %d (/%d)' % (total_adver_iterations, seeds_num * iteration_times))
+    print('avg mutation iterations for a adversarial generation: %.2f' % (total_adversrial_num / total_adver_iterations))
 except ZeroDivisionError:
     print('No adversrial is generated')
 print('\ntotal time = %.3fs' % total_time)

@@ -1,3 +1,4 @@
+# functions for I/O and initialization(preprocess)
 import random
 import os
 import keras
@@ -22,7 +23,7 @@ def shuffle_in_uni(a, b):
 
 def load_and_preprocess_data(number_of_train_data, number_of_test_data):
     (train_datas, train_labels), (test_datas, test_labels) = keras.datasets.mnist.load_data()
-    # Truncate 5000 training samples and 1000 test samples apart from original dataset
+    
     (train_datas, train_labels) = shuffle_in_uni(train_datas, train_labels)
     (test_datas, test_labels) = shuffle_in_uni(test_datas, test_labels)
     print("Shuffle train_datas and test_datas,")
@@ -61,6 +62,8 @@ def preprocess_data(width_without_padding, height_without_pading, datas):
 
 def init_storage_dir(save_dir):
     if os.path.exists(save_dir):
+        print("dir exists ! files inside will be removed !")
+        # remove files in dir
         for i in os.listdir(save_dir):
             path_file = os.path.join(save_dir, i)
             if os.path.isfile(path_file):
@@ -69,6 +72,7 @@ def init_storage_dir(save_dir):
     # if storage dir not exists
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+
 # =============================================================================
 # =============================================================================
 # =============================================================================
@@ -108,14 +112,15 @@ def init_dict(model, model_layer_dict):
 
 
 # dict.value：single value, 0 / 1+
-def init_neuron_coverage(model, model_layer_times): # 将model的一些'cover有效的'layers的model_layer_times 整个由一个dict 来表示
+def init_neuron_coverage(model, model_layer_times): 
     for layer in model.layers:
         # 对于不经过activation的layer, 不考虑其coverage
         if 'flatten' in layer.name or 'input' in layer.name:
             continue
         # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-            model_layer_times[(layer.name, index)] = 0 # 'l层 第n个 Neuron' 整个tuple(layer.name, index) 做key代表 Neuron
+        for index in range(layer.output_shape[-1]):
+        # lth layer nth Neuron: tuple(layer.name, index)is key, referring to a neuron
+            model_layer_times[(layer.name, index)] = 0 
 
 def init_coverage_times(model):
     model_layer_times = defaultdict(int)
@@ -130,12 +135,10 @@ def init_coverage_value(model):
 def init_neuron_values(model):
     model_neuron_values = defaultdict(float)
     for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
         if 'flatten' in layer.name or 'input' in layer.name:
             continue
-        # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-            # key: 'l层 第n个 Neuron' 整个tuple(layer.name, index) 代表 Neuron, value: (max, min)
+        for index in range(layer.output_shape[-1]): 
+            # lth layer nth Neuron: tuple(layer.name, index)is key, referring to a neuron
             model_neuron_values[(layer.name, index)] = [0, 0]
     return model_neuron_values
 
@@ -143,10 +146,9 @@ def init_neuron_values(model):
 def init_multisection_coverage_value(model, multisection_num):
     neurons_multisection_coverage_values = defaultdict(float)
     for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
+        
         if 'flatten' in layer.name or 'input' in layer.name:
-            continue
-        # 对于经过activation的layer
+            continue        
         for index in range(layer.output_shape[-1]): # 输出张量 last D
 
             neurons_multisection_coverage_values[(layer.name, index)] = [0] * multisection_num # [0,0,0,....]
