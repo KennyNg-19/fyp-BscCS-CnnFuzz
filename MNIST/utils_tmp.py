@@ -66,21 +66,37 @@ def store_test_cases(save_dir, mutation_name, difference_indexes, right_labels, 
         right_labels[difference_indexes[index]]), deprocess_image(test_case.reshape(1,28,28,1)))
 
 # ------------------------------------------------------------------------
-def apply_Grad_CAM(model, label, input_img, last_conv_name, last_conv_depth):
-                    # apply Grad-CAM algorithm to the generated adversrial examples and return heatmap
-                    advers_output = model.output[:, label]
-                    last_conv_layer = model.get_layer(last_conv_name)
-                    grads = K.gradients(advers_output, last_conv_layer.output)[0]
-                    pooled_grads = K.mean(grads, axis=(0, 1, 2))
-                    iterate = K.function([model.input], [pooled_grads, last_conv_layer.output[0]])
-                    pooled_grads_value, conv_layer_output_value = iterate([input_img])
-                    for conv_index in range(last_conv_depth):
-                        conv_layer_output_value[:, :, conv_index] *= pooled_grads_value[conv_index]
-                    heatmap = np.mean(conv_layer_output_value, axis=-1)
-                    heatmap = np.maximum(heatmap, 0)
-                    if np.max(heatmap) != 0:
-                        heatmap /= np.max(heatmap)        
-                    return heatmap
+def get_heatmap(model, label, input_img, last_conv_name, last_conv_depth):
+    # apply Grad-CAM algorithm to the generated adversrial examples and return heatmap
+    advers_output = model.output[:, label]
+    last_conv_layer = model.get_layer(last_conv_name)
+    grads = K.gradients(advers_output, last_conv_layer.output)[0]
+    pooled_grads = K.mean(grads, axis=(0, 1, 2))
+    iterate = K.function([model.input], [pooled_grads, last_conv_layer.output[0]])
+    pooled_grads_value, conv_layer_output_value = iterate([input_img])
+    for conv_index in range(last_conv_depth):
+        conv_layer_output_value[:, :, conv_index] *= pooled_grads_value[conv_index]
+    heatmap = np.mean(conv_layer_output_value, axis=-1)
+    heatmap = np.maximum(heatmap, 0)
+    if np.max(heatmap) != 0:
+        heatmap /= np.max(heatmap)        
+    return heatmap
+
+import cv2
+def impose_heatmap_to_img(img_path, save_dir, heatmap, adversrial_no, label, advers_label):
+    # We resize the heatmap to have the same size as the original image
+    img = cv2.imread(img_path)                
+    heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    # We convert the heatmap to RGB
+    heatmap = np.uint8(255 * heatmap)
+    # We apply the heatmap to the original image            
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)                
+    # 0.4 here is a heatmap intensity factor
+    superimposed_img = heatmap * 0.4 + img
+    # Save the image to disk
+    save_heatmap_name = save_dir + str(adversrial_no) + "_" + \
+        str(label) + '_as_' + str(advers_label) + '_heat.png'
+    imwrite(save_heatmap_name, superimposed_img)
 
 # --------------------------------------------------
 def init_dict(model, model_layer_dict):
@@ -363,7 +379,7 @@ def target_neurons_in_grad(model, model_layer_times, model_layer_value, neuron_s
 
         # 从len(neurons_covered_times))中随机选 target_neuron_cover_num_each个,
         # high_covered_neurons_indices存的是index !!! 从range的list中pick        
-        print(target_neuron_cover_num_each)
+        # print(target_neuron_cover_num_each)
         high_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), \
             target_neuron_cover_num_each, replace=False, # False: not put back after choosing
             p = neurons_covered_percentage) # higher neurons_covered_percentage, more likely to be picked

@@ -81,7 +81,7 @@ elif model_name == '3':
 else:
     print("no model!!")
 
-model.summary()
+# model.summary()
 
 if run_more_mutation:
     while True:
@@ -169,13 +169,13 @@ img_names = [img for img in os.listdir(img_dir) if img.endswith(".png")] # retur
 total_img_num = len(img_names)
 shuffle(img_names)
 while True:
-    test_img_num = int(input("Input a number of test datas <= %d:  " % total_img_num))
-    if test_img_num <= 0 or test_img_num > total_img_num:
+    seeds_num = int(input("Input a number of test datas <= %d:  " % total_img_num))
+    if seeds_num <= 0 or seeds_num > total_img_num:
         print("Sorry, it has to be (0, %d] " % total_img_num)
         continue
     else:
         break
-img_names = img_names[:test_img_num]
+img_names = img_names[:seeds_num]
 
 
 
@@ -191,13 +191,12 @@ total_perturb_adversrial = 0
 save_dir = './gen_adversarial_improved_method/'
 init_storage_dir(save_dir)
 
-seed_num = 0
 wrong_predi = 0
 find_adv_one_epoch = 0
-print("\n------------------------------- Start Fuzzing(%d filtered seeds) --------------------------------" % test_img_num)
+print("\n------------------------------- Start Fuzzing(%d filtered seeds) --------------------------------" % seeds_num)
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
-for i in range(test_img_num):
+for i in range(seeds_num):
 
     start_time = time.process_time()
     #seed_list
@@ -205,7 +204,7 @@ for i in range(test_img_num):
 
     img_name = os.path.join(img_dir,img_names[i]) # dir+name 合成single img path, (name 即img_names[i])
     if (i + 1) % 5 == 0:
-        print("Input "+ str(i+1) + "/" + str(test_img_num) + ": " + img_name)
+        print("Input "+ str(i+1) + "/" + str(seeds_num) + ": " + img_name)
 
     tmp_img = preprocess_image(img_name) # function, return a copy of the img in the path, 准备mutate -> gen_img
     img_list.append(tmp_img)
@@ -227,7 +226,6 @@ for i in range(test_img_num):
         # grab the head element
         gen_img = img_list[0] # (1, 28, 28, 1)
         img_list.remove(gen_img)
-        seed_num += 1
 
     #  Optimization 第一部分： 找到 c, c_topk = dnn.predict(Xs)
         # first check if input already induces differences
@@ -371,22 +369,11 @@ for i in range(test_img_num):
 
                 
                 # apply Grad-CAM algorithm to the generated adversrial examples
-                heatmap = apply_Grad_CAM(model, advers_pred_label, gen_img, \
+                heatmap = get_heatmap(model, advers_pred_label, gen_img, \
                     "block2_conv1", model.get_layer('block2_conv1').output_shape[-1])
-                import cv2
-                # We resize the heatmap to have the same size as the original image
-                img = cv2.imread(save_img_name)                
-                heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
-                # We convert the heatmap to RGB
-                heatmap = np.uint8(255 * heatmap)
-                # We apply the heatmap to the original image            
-                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)                
-                # 0.4 here is a heatmap intensity factor
-                superimposed_img = heatmap * 0.4 + img
-                # Save the image to disk
-                save_heatmap_name = save_dir + str(total_adversrial_num) + "_" + \
-                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '_heat.png'
-                imwrite(save_heatmap_name, superimposed_img)
+                
+                impose_heatmap_to_img(save_img_name, save_dir, heatmap, total_adversrial_num, \
+                    orig_pred_label, advers_pred_label)
 
                 # break ?
                 # the_input_adversarial_num += 1
@@ -411,7 +398,7 @@ for i in range(test_img_num):
         k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])/k_section_neurons_num))
         print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
         k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
-        print("wrong predict %d/%d <=> %.3f" % (wrong_predi, seed_num, wrong_predi/seed_num))
+        print("wrong predict %d/%d <=> %.3f" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
         print("No. adversarial: " + str(total_adversrial_num))
         # print('In %d epochs: %d adversarial examples' % (iteration_times, the_input_adversarial_num))
         print('====================================')            
@@ -422,8 +409,8 @@ for i in range(test_img_num):
     total_time += duration
 
 print('\n--------------------------Summary-----------------------------')
-print("wrong prediction(cross decision boundary) %d/%d <=> %.3f\n" % (wrong_predi, seed_num, wrong_predi/seed_num))
-# print('adversarial found JUST in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, test_img_num, find_adv_one_epoch/test_img_num))
+print("wrong prediction(cross decision boundary) %d/%d <=> %.3f\n" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
+# print('adversarial found JUST in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, seeds_num, find_adv_one_epoch/seeds_num))
 print('covered neurons percentage %.3f for %d neurons'
       % ((neuron_covered(model_layer_times2)[2]), total_neuron_num))
 covered_sections_num = 0
@@ -438,7 +425,7 @@ k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])
 print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
 k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
 try:
-    print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, test_img_num))
+    print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, seeds_num))
     print('average norm = %.3f ' % (total_norm / total_adversrial_num))
     # print('average time of generating an adversarial input %.3f s' % (total_time / total_adversrial_num))
     print('average perb adversrial = %.4f' % (total_perturb_adversrial / total_adversrial_num))
