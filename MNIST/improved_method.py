@@ -81,6 +81,7 @@ elif model_name == '3':
 else:
     print("no model!!")
 
+model.summary()
 
 if run_more_mutation:
     while True:
@@ -193,7 +194,7 @@ init_storage_dir(save_dir)
 seed_num = 0
 wrong_predi = 0
 find_adv_one_epoch = 0
-print("\n------------------------------- Start Fuzzing(%d seeds) --------------------------------" % test_img_num)
+print("\n------------------------------- Start Fuzzing(%d filtered seeds) --------------------------------" % test_img_num)
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
 for i in range(test_img_num):
@@ -232,7 +233,7 @@ for i in range(test_img_num):
         # first check if input already induces differences
         orig_pred = model.predict(gen_img)
         orig_pred_label = np.argmax(orig_pred[0])
-        
+        label_top5 = np.argsort(orig_pred[0])[-5:]
 
         # 记下 gen_img 对应的nueron value和cover 情况 ： model_layer_times1是 作为 past testing !!!
         update_coverage_value(gen_img, model, model_layer_value1)
@@ -345,8 +346,12 @@ for i in range(test_img_num):
                 if(iters == 0):
                     find_adv_one_epoch += 1
 
+                total_adversrial_num += 1
+                the_input_adversarial_num += 1
+                
+                
                 update_coverage(gen_img, model, model_layer_times2, model_neuron_values, k_multisection_coverage, \
-                multisection_num, upper_corner_coverage, lower_corner_coverage, threshold)
+            multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
 
                 total_norm += L2_norm
 
@@ -359,11 +364,29 @@ for i in range(test_img_num):
 
                 gen_img_deprocessed = deprocess_image(gen_img_tmp)
                 # use timestamp to name the generated adversrial input
-                save_img_name = save_dir + img_name + '_' + str(get_signature()) + '.png'
+                save_img_name = save_dir + str(total_adversrial_num) + "_" + \
+                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '.png'
 
                 imwrite(save_img_name, gen_img_deprocessed)
 
-                total_adversrial_num += 1
+                
+                # apply Grad-CAM algorithm to the generated adversrial examples
+                heatmap = apply_Grad_CAM(model, advers_pred_label, gen_img, \
+                    "block2_conv1", model.get_layer('block2_conv1').output_shape[-1])
+                import cv2
+                # We resize the heatmap to have the same size as the original image
+                img = cv2.imread(save_img_name)                
+                heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+                # We convert the heatmap to RGB
+                heatmap = np.uint8(255 * heatmap)
+                # We apply the heatmap to the original image            
+                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)                
+                # 0.4 here is a heatmap intensity factor
+                superimposed_img = heatmap * 0.4 + img
+                # Save the image to disk
+                save_heatmap_name = save_dir + str(total_adversrial_num) + "_" + \
+                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '_heat.png'
+                imwrite(save_heatmap_name, superimposed_img)
 
                 # break ?
                 # the_input_adversarial_num += 1
@@ -399,7 +422,7 @@ for i in range(test_img_num):
     total_time += duration
 
 print('\n--------------------------Summary-----------------------------')
-print("wrong prediction(cross decision boundary) %d/%d <=> %.3f" % (wrong_predi, seed_num, wrong_predi/seed_num))
+print("wrong prediction(cross decision boundary) %d/%d <=> %.3f\n" % (wrong_predi, seed_num, wrong_predi/seed_num))
 # print('adversarial found JUST in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, test_img_num, find_adv_one_epoch/test_img_num))
 print('covered neurons percentage %.3f for %d neurons'
       % ((neuron_covered(model_layer_times2)[2]), total_neuron_num))

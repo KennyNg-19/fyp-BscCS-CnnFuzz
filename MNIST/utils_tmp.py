@@ -64,34 +64,23 @@ def store_test_cases(save_dir, mutation_name, difference_indexes, right_labels, 
     for index, test_case in enumerate(gen_test_cases):
         imwrite('%s%d_%d.png' % (save_dir + mutation_name, index + 1, \
         right_labels[difference_indexes[index]]), deprocess_image(test_case.reshape(1,28,28,1)))
+
 # ------------------------------------------------------------------------
-
-
-def constraint_occl(gradients, start_point, rect_shape):
-    new_grads = np.zeros_like(gradients)
-    new_grads[:, start_point[0]:start_point[0] + rect_shape[0],
-    start_point[1]:start_point[1] + rect_shape[1]] = gradients[:, start_point[0]:start_point[0] + rect_shape[0],
-                                                     start_point[1]:start_point[1] + rect_shape[1]]
-    return new_grads
-
-
-def constraint_light(gradients):
-    new_grads = np.ones_like(gradients)
-    grad_mean = 1e4 * np.mean(gradients)
-    return grad_mean * new_grads
-
-
-def constraint_black(gradients, rect_shape=(10, 10)):
-    start_point = (
-        random.randint(0, gradients.shape[1] - rect_shape[0]), random.randint(0, gradients.shape[2] - rect_shape[1]))
-    new_grads = np.zeros_like(gradients)
-    patch = gradients[:, start_point[0]:start_point[0] + rect_shape[0], start_point[1]:start_point[1] + rect_shape[1]]
-    if np.mean(patch) < 0:
-        new_grads[:, start_point[0]:start_point[0] + rect_shape[0],
-        start_point[1]:start_point[1] + rect_shape[1]] = -np.ones_like(patch)
-    return new_grads
-
-
+def apply_Grad_CAM(model, label, input_img, last_conv_name, last_conv_depth):
+                    # apply Grad-CAM algorithm to the generated adversrial examples and return heatmap
+                    advers_output = model.output[:, label]
+                    last_conv_layer = model.get_layer(last_conv_name)
+                    grads = K.gradients(advers_output, last_conv_layer.output)[0]
+                    pooled_grads = K.mean(grads, axis=(0, 1, 2))
+                    iterate = K.function([model.input], [pooled_grads, last_conv_layer.output[0]])
+                    pooled_grads_value, conv_layer_output_value = iterate([input_img])
+                    for conv_index in range(last_conv_depth):
+                        conv_layer_output_value[:, :, conv_index] *= pooled_grads_value[conv_index]
+                    heatmap = np.mean(conv_layer_output_value, axis=-1)
+                    heatmap = np.maximum(heatmap, 0)
+                    if np.max(heatmap) != 0:
+                        heatmap /= np.max(heatmap)        
+                    return heatmap
 
 # --------------------------------------------------
 def init_dict(model, model_layer_dict):
@@ -373,8 +362,10 @@ def target_neurons_in_grad(model, model_layer_times, model_layer_value, neuron_s
         neurons_covered_percentage = neurons_covered_times / float(total_neurons_covered_times) # neurons_covered_times(list) braodcasting,
 
         # 从len(neurons_covered_times))中随机选 target_neuron_cover_num_each个,
-        # high_covered_neurons_indices存的是index !!! 从range的list中pick
-        high_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), target_neuron_cover_num_each, replace=False, # False: not put  back after choosing
+        # high_covered_neurons_indices存的是index !!! 从range的list中pick        
+        print(target_neuron_cover_num_each)
+        high_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), \
+            target_neuron_cover_num_each, replace=False, # False: not put back after choosing
             p = neurons_covered_percentage) # higher neurons_covered_percentage, more likely to be picked
 
         for num in high_covered_neurons_indices:
@@ -391,9 +382,10 @@ def target_neurons_in_grad(model, model_layer_times, model_layer_value, neuron_s
         neurons_covered_times_inverse = np.subtract(max(neurons_covered_times), neurons_covered_times)
         # trick： 让越小的负数 被pick的prop越大， 就是全体除以同一个负数，这样又变正了
         neurons_covered_percentage_inverse = neurons_covered_times_inverse / float(sum(neurons_covered_times_inverse))
-        # low_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), p=neurons_covered_percentage_inverse)
-        low_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), target_neuron_cover_num_each, replace=False,
-                                       p=neurons_covered_percentage_inverse)
+        # low_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), p=neurons_covered_percentage_inverse)        
+        low_covered_neurons_indices = np.random.choice(range(len(neurons_covered_times)), \
+                target_neuron_cover_num_each, replace=False,
+                p = neurons_covered_percentage_inverse)
         for num in low_covered_neurons_indices:
             layer_name1, index1 = neurons_key_pos[num] # 锁定neuron
             low_covered_neuron_output = K.mean(model.get_layer(layer_name1).output[..., index1])

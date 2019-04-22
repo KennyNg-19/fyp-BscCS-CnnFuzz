@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# cmd with 7 params: python existing_method.py 2 0.25 30 3 5 4 [4123]
+# cmd with 7 params: python existing_method.py 2 0.25 8 3 5 4 [4123]
 #                                         model_No(1/2/3)
+# for LeNet 1, No.neurons to cover should be small, < 6 is normally ok
 
 from __future__ import print_function
 
@@ -19,35 +20,27 @@ K.set_learning_phase(0)
 
 model_name = sys.argv[1]
 
-# while True:
-#     model_name = input("Input a model type among 1, 2, 3:  ")
-#     if model_name not in ["1", "2", "3"]:
-#         print("Sorry, it is invalid...")
-#         continue
-#     else:
+
 if model_name == '1':
     model_name = "Model1"
     model = load_model('./Model1.h5')
-    print('LeNet-1 loaded')
-    print("-------------------Testing on LeNet-1(52 neurons)---------------------")
+    print('LeNet-1(52 neurons) loaded')
 elif model_name == '2':
     model_name = "Model2"
     model = load_model('./Model2.h5')
-    print('LeNet-4 loaded')
-    print("-------------------Testing on LeNet-4(148 neurons)---------------------")
+    print('LeNet-4(148 neurons) loaded')
 elif model_name == '3':
     model_name = "Model3"
     model = load_model('./Model3.h5')
-    print('LeNet-5 loaded')
-    print("-------------------Testing on LeNet-5(268 neurons)---------------------")
+    print('LeNet-5(268 neurons) loaded')
         # break
 else:
-    print("no model!!")
+    print("No such a model!!")
     os._exit(0)
 
 # model.summary()
 
-print("------------------------Run existing testing method for MNIST-------------------------")
+print("------------------------Run existing testing method for MNIST set-------------------------")
 # 都是 deafult dict
 model_layer_times1 = init_coverage_times(model)  # dict for coverage times of each neuron covered 次数
 model_layer_times2 = init_coverage_times(model)  # 和上一行 初始化保持一致 直到 update when new image and adversarial images found
@@ -124,7 +117,7 @@ if not os.path.exists(save_dir):
 seed_num = 0
 wrong_predi = 0
 find_adv_one_epoch = 0
-print("\n------------------------------- Start Fuzzing(50 seeds) --------------------------------")
+print("\n------------------------------- Start Fuzzing(50 normal seeds) --------------------------------")
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
 for i in range(img_num):
@@ -146,7 +139,7 @@ for i in range(img_num):
 
     # to get labels
     img_name = img_names[i].split('.')[0] # extract img name without the path suffix(after the “.”）
-    mannual_label = int(img_name.split('_')[1]) # seed name is like "206_0", extract the label exactly from the 2nd part of the name
+    right_label = int(img_name.split('_')[1]) # seed name is like "206_0", extract the label exactly from the 2nd part of the name
 
     # ----------------------------------------------------------------
     # 原生img 输入，记下 原生nueron cover情况
@@ -164,32 +157,32 @@ for i in range(img_num):
 
     #  Optimization 第一部分： 找到 c, c_topk = dnn.predict(Xs)
         # first check if input already induces differences
-        pred1 = model.predict(gen_img)
-        label1 = np.argmax(pred1[0]) # [0] ??
-        label_top5 = np.argsort(pred1[0])[-5:]
+        orig_pred = model.predict(gen_img)
+        orig_pred_label = np.argmax(orig_pred[0]) # [0] ??
+        label_top5 = np.argsort(orig_pred[0])[-5:]
 
         # 记下 gen_img 对应的nueron value和cover 情况 ： 作为 past testing !!!
         update_coverage_value(gen_img, model, model_layer_value1)
         update_coverage(gen_img, model, model_layer_times1, model_neuron_values, k_multisection_coverage, \
             multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
 
-        orig_label = label1
-
         seed_num += 1
-        if label1 != mannual_label:
+        if orig_pred_label != right_label:
             wrong_predi += 1
-            # print("----------------For a seed img %d: %d, model predicts %d, wrong------------" % (i+1, mannual_label, label1))
+            # print("----------------For a seed img %d: %d, model predicts %d, wrong------------" % (i+1, right_label, orig_pred_label))
 
+        top_k_class = int(sys.argv[8])
+        label_topk = np.argsort(orig_pred[0])[-top_k_class:]
+
+        loss_1 = K.mean(model.get_layer('before_softmax').output[..., orig_pred_label])
+        loss = 0
         # Tensor: (?,) first dimension is not fixed in the graph and it can vary between run calls
-        loss_1 = K.mean(model.get_layer('before_softmax').output[..., orig_label])
-        loss_2 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-2]])
-        loss_3 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-3]])
-        loss_4 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-4]])
-        loss_5 = K.mean(model.get_layer('before_softmax').output[..., label_top5[-5]])
+        for i_class in range(2, top_k_class + 1):
+            loss += K.mean(model.get_layer('before_softmax').output[..., label_topk[-i_class]])
+
 
         # Optimization 第一部分，sum(c_topk) - c， hyper param: predict_weight = 0.5,
-        layer_output = (predict_weight * (loss_2 + loss_3 + loss_4 + loss_5) - loss_1)
-
+        layer_output = (predict_weight * loss - loss_1)
 
 
 
@@ -213,8 +206,9 @@ for i in range(img_num):
 
     # ---------------------------------------------------grads = @obj/@xs--------------------------------------------------------------
     # 1.定义 gradients backend函数: 求损失函数关于变量的导数，也就是网络的反向计算过程。
-        grads_tensor_list = [loss_1, loss_2, loss_3, loss_4, loss_5]
-        grads_tensor_list.extend(loss_neuron) # extend 加一个list
+        grads_tensor_list = []
+        # grads_tensor_list = [loss_1, loss]
+        # grads_tensor_list.extend(loss_neuron) # extend 加一个list
 
         # K.gradients（loss，vars）： 用于求loss关于vars 的导数（梯度）(若为vars tensor，则是求每个var的偏导数,输出也是gradients tensor)----通过tensorflow的tf.gradients()
         # gradient obtained: compute the gradient of the input picture wrt this loss
@@ -234,7 +228,7 @@ for i in range(img_num):
         # we run gradient ascent for 3 steps
         for iters in range(iteration_times): # 1 epoch, 最多一个 adversrial generation ≤ iteration_times 输入超参epoch
 
-            # run  gradient函数, gradient obtained
+            # run gradient函数, gradient, in grads_tensor_list, obtained
             loss_neuron_list = iterate([gen_img])
 
             # perturbation = processing(grads)
@@ -246,9 +240,9 @@ for i in range(img_num):
             # measure 1: improvement on coverage
             # previous accumulated neuron coverage
             previous_coverage = neuron_covered(model_layer_times1)[2]
-            pred1 = model.predict(gen_img)
-            label1 = np.argmax(pred1[0])
-
+            advers_pred = model.predict(gen_img) # score in [0:1]
+            advers_pred_label = np.argmax(advers_pred[0]) 
+            
 
 
             #  update cov_tracker
@@ -272,9 +266,13 @@ for i in range(img_num):
                 img_list.append(gen_img)
 
             # Find an adversrial, break 否？
-            if label1 != orig_label:
+            if advers_pred_label != orig_pred_label:
                 if(iters == 0):
                     find_adv_one_epoch += 1
+
+                total_adversrial_num += 1
+                the_input_adversarial_num += 1
+                adversrial_num += 1
 
                 update_coverage(gen_img, model, model_layer_times2, model_neuron_values, k_multisection_coverage, \
             multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
@@ -290,13 +288,30 @@ for i in range(img_num):
 
                 gen_img_deprocessed = deprocess_image(gen_img_tmp)
                 # use timestamp to name the generated adversrial input
-                save_img_name = save_dir + img_name + '_' + str(get_signature()) + '.png'
+                save_img_name = save_dir + str(total_adversrial_num) + "_" + \
+                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '.png'
 
                 imwrite(save_img_name, gen_img_deprocessed)
 
-                total_adversrial_num += 1
-                the_input_adversarial_num += 1
-                adversrial_num += 1
+                
+                # apply Grad-CAM algorithm to the generated adversrial examples
+                heatmap = apply_Grad_CAM(model, advers_pred_label, gen_img, \
+                    "block2_conv1", model.get_layer('block2_conv1').output_shape[-1])
+                import cv2
+                # We resize the heatmap to have the same size as the original image
+                img = cv2.imread(save_img_name)                
+                heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+                # We convert the heatmap to RGB
+                heatmap = np.uint8(255 * heatmap)
+                # We apply the heatmap to the original image            
+                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)                
+                # 0.4 here is a heatmap intensity factor
+                superimposed_img = heatmap * 0.4 + img
+                # Save the image to disk
+                save_heatmap_name = save_dir + str(total_adversrial_num) + "_" + \
+                    str(orig_pred_label) + '_as_' + str(advers_pred_label) + '_heat.png'
+                imwrite(save_heatmap_name, superimposed_img)
+                
 
                 # break ?
                 # print("===========Find an adversrial, break============")
@@ -315,7 +330,7 @@ for i in range(img_num):
     total_time += duration
 
 print('\n--------------------------Summary-----------------------------')
-print("wrong prediction(guide to cross decision boundary) %d/%d <=> %.3f\n" % (wrong_predi, seed_num, wrong_predi/seed_num))
+print("wrong prediction(normal input data, should be small) %d/%d <=> %.3f\n" % (wrong_predi, seed_num, wrong_predi/seed_num))
 # print('adversarial found in 1st epoch(close to decision boundary): %d/%d <=> %.2f\n' % (find_adv_one_epoch, test_img_num, find_adv_one_epoch/test_img_num))
 
 print('covered neurons percentage %.3f for %d neurons'
