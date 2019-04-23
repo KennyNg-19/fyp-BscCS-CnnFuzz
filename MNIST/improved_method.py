@@ -30,6 +30,8 @@ from mut_operators import *
 seeds_dir = './seeds_improved_method/'
 existing_imgs = [img for img in os.listdir(seeds_dir) if img.endswith(".png")]
 run_more_mutation = False
+
+# --------------in experiment: get comments ----------------------
 # if len(existing_imgs) > 0:
 #     more_mutation = input("keep the prev %d test cases. Not run operators? [y/other keys]: " % len(existing_imgs))
 #     if more_mutation != 'y' and more_mutation != 'Y':
@@ -106,8 +108,9 @@ if run_more_mutation:
 # =============================================================================
 print("\n------------------------Run improved testing method for MNIST-------------------------")
 
+# experiment params (batches for get average results)
+batch_num = 2
 batch_size = 50
-batch_num = 3
 total_test_data_num = batch_num * batch_size
 seeds_num = batch_size
 
@@ -161,6 +164,9 @@ print("\nNeuron Selection Strategies: " + str(num_strategy),
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
 
+# load neuron output ranges
+model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name) 
+
 for batch_no in range(batch_num):
     print("---------------------Batch %d (50)-----------------------" % (batch_no + 1))
 
@@ -176,7 +182,6 @@ for batch_no in range(batch_num):
     # metric 2: k-section coverage
     multisection_num = int(sys.argv[6])
     # a dict for each neuron outputs' ranges
-    model_neuron_values = load_file("%s_neuron_ranges.npy" % model_name) 
     k_section_neurons_num = len(model_neuron_values)
     k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
     total_section_num = k_section_neurons_num * multisection_num # constant, of all neurons' sections
@@ -420,9 +425,9 @@ print('avg upperCorner coverage: %.3f/%d <=> %.3f' % (sum_upper_corner_coverage,
 # print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_times.values() if v > 0]), \
 # k_section_neurons_num, len([v for v in lower_corner_times.values() if v > 0])/k_section_neurons_num))
 try:
-    print('\navg adversrial examples  = %.3f/50' % (total_adversrial_num/batch_size))
-    print('avg mutation iterations for adversrials: %.3f (/%d)' % (total_adver_iterations/batch_size, \
-                                                                                        seeds_num * iteration_times))
+    print('\navg adversrial examples  = %.3f/50' % (total_adversrial_num/batch_num))
+    print('avg mutation iterations for adversrials: %.3f /%d' % (total_adver_iterations/batch_num, \
+                                                                            batch_size * iteration_times))
     print('')
     print('For an adver, \navg L2 norm = %.3f' % (total_norm / total_adversrial_num))
     # print('average time of generating an adversarial input %.3f s' % (total_time / total_adversrial_num))
