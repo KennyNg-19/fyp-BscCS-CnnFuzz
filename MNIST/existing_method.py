@@ -68,8 +68,8 @@ k_multisection_coverage = init_multisection_coverage_value(model, multisection_n
 total_section_num = k_section_neurons_num * multisection_num # constant, of all neurons' sections
 
 # metric 3: corner coverage
-upper_corner_coverage = init_coverage_times(model)
-lower_corner_coverage = init_coverage_times(model)
+upper_corner_times = init_coverage_times(model)
+lower_corner_times = init_coverage_times(model)
 
 
 # set hyper params
@@ -127,7 +127,7 @@ for i in range(seeds_num):
     # ----------------------------------------------------------------
     # coverage, for the original img, in model_layer_times2
     update_coverage(tmp_img, model, model_layer_times2, model_neuron_values, k_multisection_coverage, \
-            multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
+            multisection_num, upper_corner_times, lower_corner_times, threshold) # for seed selection
 
     # ====================================================================================================
     # ====================================================================================================
@@ -150,7 +150,7 @@ for i in range(seeds_num):
         # neurons' values, coverage for gen_img, in model_layer_value1, as past testing
         update_coverage_value(gen_img, model, model_layer_value1)
         update_coverage(gen_img, model, model_layer_times1, model_neuron_values, k_multisection_coverage, \
-            multisection_num, upper_corner_coverage, lower_corner_coverage, threshold)
+            multisection_num, upper_corner_times, lower_corner_times, threshold)
 
         # prediction class score
         top_class_score = K.mean(model.get_layer('before_softmax').output[..., orig_pred_label])
@@ -222,7 +222,7 @@ for i in range(seeds_num):
             
             #  update cov_tracker
             update_coverage(gen_img, model, model_layer_times1, model_neuron_values, k_multisection_coverage, \
-            multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
+            multisection_num, upper_corner_times, lower_corner_times, threshold) # for seed selection
 
             current_coverage = neuron_covered(model_layer_times1)[2]
 
@@ -248,7 +248,7 @@ for i in range(seeds_num):
                 total_adversrial_num += 1
 
                 update_coverage(gen_img, model, model_layer_times2, model_neuron_values, k_multisection_coverage, \
-            multisection_num, upper_corner_coverage, lower_corner_coverage, threshold) # for seed selection
+            multisection_num, upper_corner_times, lower_corner_times, threshold) # for seed selection
 
                 total_norm += L2_norm
 
@@ -276,10 +276,12 @@ for i in range(seeds_num):
         total_adver_iterations += iters
 
     if (i + 1) % 10 == 0:    
-        print('NC: %d/%d <=> %.3f, ' % (len([v for v in model_layer_times2.values() if v > 0]),
-        len(model_layer_times2), (neuron_covered(model_layer_times2)[2])), \
-        "\ttotal adversarial generated: " + str(total_adversrial_num))
-        print("incorrect predict %d/%d <=> %.2f" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
+        nueron_covered_num = len([v for v in model_layer_times2.values() if v > 0])
+        neuron_coverage = neuron_covered(model_layer_times2)[2]
+        
+        print('NC: %d/%d <=> %.3f, ' % (nueron_covered_num, total_neuron_num, neuron_coverage), \
+        "\ttotal adversarial generated: %d " % (total_adversrial_num))
+        # print("incorrect predict %d/%d <=> %.2f" % (wrong_predi, seeds_num, wrong_predi/seeds_num))
     
     if (i + 1) % 60 == 0:
         covered_sections_num = 0
@@ -287,14 +289,19 @@ for i in range(seeds_num):
             for key in neuron_sections: # each neuron： neuron_sections [0.0.0.0...]
                 if key > 0:
                     covered_sections_num += 1
-        print('====================================')                            
-        print('K-section coverage: %d/%d <=> %.3f' % (covered_sections_num, total_section_num, \
-        covered_sections_num/total_section_num))
+        k_section_coverage = covered_sections_num/total_section_num
 
-        print('UpperCorner coverage: %d/%d <=> %.3f' % (len([v for v in upper_corner_coverage.values() if v > 0]), \
-        k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])/k_section_neurons_num))
-        # print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
-        # k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
+        upper_corner_covered = len([v for v in upper_corner_times.values() if v > 0]) 
+        upper_corner_coverage = upper_corner_covered/k_section_neurons_num
+        
+        print('====================================')                            
+        print('K-section coverage: %d/%d <=> %.3f' % (covered_sections_num, \
+                                                                total_section_num, k_section_coverage))            
+            
+        print('UpperCorner coverage: %d/%d <=> %.3f' % (upper_corner_covered, \
+                                                                k_section_neurons_num, upper_corner_coverage))
+        # print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_times.values() if v > 0]), \
+        # k_section_neurons_num, len([v for v in lower_corner_times.values() if v > 0])/k_section_neurons_num))
         print('====================================')            
 
     end_time = time.process_time()
@@ -315,10 +322,10 @@ for neuron_sections in k_multisection_coverage.values(): # each layer: {[0.0.0.0
             covered_sections_num += 1
 print('%d-section coverage: %d/%d <=> %.3f' % (multisection_num, covered_sections_num, total_section_num, \
 covered_sections_num/total_section_num))
-print('UpperCorner coverage: %d/%d <=> %.3f' % (len([v for v in upper_corner_coverage.values() if v > 0]), \
-k_section_neurons_num, len([v for v in upper_corner_coverage.values() if v > 0])/k_section_neurons_num))
-# print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_coverage.values() if v > 0]), \
-# k_section_neurons_num, len([v for v in lower_corner_coverage.values() if v > 0])/k_section_neurons_num))
+print('UpperCorner coverage: %d/%d <=> %.3f' % (len([v for v in upper_corner_times.values() if v > 0]), \
+k_section_neurons_num, len([v for v in upper_corner_times.values() if v > 0])/k_section_neurons_num))
+# print('LowerCorner coverage: %d/%d <=> %.3f' % (len([v for v in lower_corner_times.values() if v > 0]), \
+# k_section_neurons_num, len([v for v in lower_corner_times.values() if v > 0])/k_section_neurons_num))
 try:
     print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, seeds_num))
     print('avg norm = %.3f ' % (total_norm / total_adversrial_num))
