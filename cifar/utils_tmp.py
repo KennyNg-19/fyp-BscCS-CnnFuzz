@@ -116,17 +116,6 @@ test_datas, test_labels, seeds_dir, AFRs_mutated_layer_indices = None):
     print("now %d test cases are saved\n" % total_test_cases_num)
 
 # =======================================For other coverage metrics=============================================================
-def init_neuron_values(model):
-    model_neuron_values = defaultdict(float)
-    for layer in model.layers:
-        # 对于不经过activation的layer, 不考虑其coverage
-        if 'flatten' in layer.name or 'input' in layer.name or 'dropout' in layer.name:
-            continue
-        # 对于经过activation的layer
-        for index in range(layer.output_shape[-1]): # 输出张量 last D
-            # key: 'l层 第n个 Neuron' 整个tuple(layer.name, index) 代表 Neuron, value: (max, min)
-            model_neuron_values[(layer.name, index)] = [0, 0]
-    return model_neuron_values
 
 # dict.value： multiple values in a list, 0 / 1+
 def init_multisection_coverage_value(model, multisection_num):

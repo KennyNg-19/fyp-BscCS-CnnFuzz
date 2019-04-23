@@ -31,15 +31,9 @@ seeds_dir = './seeds_improved_method/'
 existing_imgs = [img for img in os.listdir(seeds_dir) if img.endswith(".png")]
 run_more_mutation = False
 if len(existing_imgs) > 0:
-    renew = input("detect %d unfiltered imgs exist, do you wanna renew them? [y/other keys]: " % len(existing_imgs))
-    if renew == 'y' or renew == 'Y':
-        init_storage_dir(seeds_dir)
-        run_more_mutation = True # then there is no test cases before
-    else:
-        more_mutation = input("keep the prev %d test cases. Not run operators? [y/other keys]: " % len(existing_imgs))
-        if more_mutation != 'y' and more_mutation != 'Y':
-            run_more_mutation = True
-
+    more_mutation = input("keep the prev %d test cases. Not run operators? [y/other keys]: " % len(existing_imgs))
+    if more_mutation != 'y' and more_mutation != 'Y':
+        run_more_mutation = True
     print('---------read %d test cases from %s----------' %(len(existing_imgs), seeds_dir))
     pass
 else:
@@ -118,7 +112,7 @@ img_names = [img for img in os.listdir(img_dir) if img.endswith(".png")] # retur
 total_img_num = len(img_names)
 random.shuffle(img_names)
 while True:
-    seeds_num = int(input("Input a number of test datas <= %d:  " % total_img_num))
+    seeds_num = int(input("Input the number of filtered test cases <= %d:  " % total_img_num))
     if seeds_num <= 0 or seeds_num > total_img_num:
         print("Sorry, it has to be (0, %d] " % total_img_num)
         continue

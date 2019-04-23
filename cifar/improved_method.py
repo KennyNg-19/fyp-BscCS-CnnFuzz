@@ -201,7 +201,7 @@ init_storage_dir(save_dir)
 
 seed_num, wrong_predi, find_adv_one_epoch = 0, 0, 0
 # 开始实验
-print("-------------------------------Start Fuzzing(%d seeds)--------------------------------" % test_img_num)
+print("-------------------------------Start Fuzzing(%d filtered seeds)--------------------------------" % test_img_num)
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
 
@@ -366,7 +366,7 @@ for i in range(test_img_num):
 
                 gen_img_deprocessed = deprocess_image(gen_img_tmp)
                 # use timestamp to name the generated adversrial input
-                save_img_name = save_dir + img_name + '_' + str(get_signature()) + '.png'
+                save_img_name = save_dir + img_name + '_as_' + str(advers_pred_label) + '.png'
 
                 imwrite(save_img_name, gen_img_deprocessed)
 

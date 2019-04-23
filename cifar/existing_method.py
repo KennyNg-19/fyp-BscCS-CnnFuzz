@@ -51,6 +51,8 @@ def shuffle_in_uni(a, b):
     shuffled_b[permutation] = b[index_permutation]
     return shuffled_a, shuffled_b
 
+
+
 fixed_test_cases_num = 50
 (train_datas, train_labels), (test_datas, test_labels) = cifar10.load_data()
 
@@ -96,29 +98,28 @@ shuffle(img_names)
 
 
 
-
-# e.g.[1,2,3] None for neurons not covered, 1 for covered often, 2 for covered rarely, 3 for high weights
-threshold = float(sys.argv[2])
-target_neuron_cover_num = int(sys.argv[3])
-iteration_times = int(sys.argv[4]) #  epoch
-balance_lambda = float(sys.argv[5]) # λ 越大，则以Neuron coverage为目标；越小，则以more adversrial为目标
-neuron_select_strategy = sys.argv[7] # str，准备用for loop来split
+threshold = float(sys.argv[2]) # activation threshold
+target_neuron_cover_num = int(sys.argv[3]) # neurons to cover
+iteration_times = int(sys.argv[4]) #  epochs
+balance_lambda = float(sys.argv[5]) # Optimization λ, greater then focus on Neuron coverage; lese, on adversrial example
+neuron_select_strategy = sys.argv[7] # among [1 2 3 4], pick one, or more
 print("\nNeuron Selection Strategies: " + str([x for x in neuron_select_strategy if x in ['1', '2', '3', '4']]))
 
-# deafult dict
-model_layer_times1 = init_coverage_times(model)  # dict for coverage times of each neuron covered 次数
-model_layer_times2 = init_coverage_times(model)  # 和上一行 初始化保持一致 直到 update when new image and adversarial images found
+# metric 1: basic neuron coverage
+model_layer_times1 = init_coverage_times(model)  # a dict for coverage times of each neuron covered 
+model_layer_times2 = init_coverage_times(model)  # same as above, but update when new image and adversarial images found
 
 model_layer_value1 = init_coverage_value(model) #
 
 total_neuron_num = len(model_layer_times1) # constant
 
-
+# metric 2: k-section coverage
 multisection_num = int(sys.argv[6])
 total_section_num = total_neuron_num * multisection_num # constant, of all neurons' sections
-
 k_multisection_coverage = init_multisection_coverage_value(model, multisection_num)
 k_multisection_coverage_copy = init_multisection_coverage_value(model, multisection_num)
+
+# metric 3: corner coverage
 upper_corner_coverage = init_coverage_times(model)
 lower_corner_coverage = init_coverage_times(model)
 
@@ -131,22 +132,13 @@ total_norm = 0
 total_adversrial_num = 0
 total_perturb_adversrial = 0
 
-# 设置 output 选定 storage dir
+# set output dir: generated adversrials
 save_dir = './gen_adversarial_existing_method/'
-
-if os.path.exists(save_dir):
-    for i in os.listdir(save_dir):
-        path_file = os.path.join(save_dir, i)
-        if os.path.isfile(path_file):
-            os.remove(path_file)
-
-# if storage dir not exists
-if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
+init_storage_dir('./gen_adversarial_existing_method/')
 
 seed_num, wrong_predi, find_adv_one_epoch = 0, 0, 0
 # 开始实验
-print("\n------------------------------- Start Fuzzing(50 seeds) --------------------------------")
+print("\n------------------------------- Start Fuzzing(50 normal seeds) --------------------------------")
 print("Store: generated adversarial saved in:", save_dir)
 print("Note: to find adversarials with MINIMAL pertrubations, ONCE FOUND in %d epochs, the test will go to the next iteration\n" % iteration_times)
 for i in range(fixed_test_cases_num):
@@ -305,7 +297,7 @@ for i in range(fixed_test_cases_num):
 
                 gen_img_deprocessed = deprocess_image(gen_img_tmp)
                 # use timestamp to name the generated adversrial input
-                save_img_name = save_dir + img_name + '_' + str(get_signature()) + '.png'
+                save_img_name = save_dir + img_name + '_as_' + str(advers_pred_label) + '.png'
 
                 imwrite(save_img_name, gen_img_deprocessed)
 
