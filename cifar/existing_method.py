@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# cmd with 7 params: python existing_method.py 4 0.25 30 3 lambda 2 [4123]
+# cmd with 7 params: python existing_method.py modelNo(4/5) 0.25 30 3 lambda sec_num [4123]
 
 from __future__ import print_function
 
@@ -11,28 +11,11 @@ from utils import *
 import sys
 import os
 import time
-# load multiple models sharing same input tensor
-K.set_learning_phase(0)
 
+
+# ----------------------import data-------------------------------
 img_height, img_width = 32, 32
 img_channels_num = 3
-
-
-model_num = sys.argv[1]
-
-if model_num == '4':
-    model_name = "Model4"
-    model = load_model('Model4.h5')
-    print("load Model4 for cifar-10")
-elif model_num == '5':
-    model_name = "Model5"
-    model = load_model('Model5 87.h5')
-    print("load Model5 for cifar-10")
-else:
-    print('Wrong model name')
-    os._exit(0)
-
-# model.summary()
 
 
 
@@ -76,15 +59,30 @@ if len(existing_imgs) > 0:
 else:
     print("No unfiltered imgs exist, randomly pick %d" % fixed_test_cases_num)
     clear_store_orig_imgs(test_datas, test_labels, img_dir)
+# -------------------------------------------------------------------------
 
 
 
 
 
-
-# -----------------------------------------------------------------------------
 
 print("------------------------Run existing testing method for cifar-10-------------------------")
+
+# load model
+model_no = sys.argv[1]
+
+if model_no == '4': # an underfitting model
+    model_name = 'Model4' 
+    model = load_model('Model4.h5')
+    print("load Model4(1524 neurons, acc 75%) for cifar-10")
+elif model_num == '5': # with dropout layer
+    model_name = 'Model5'
+    model = load_model('Model5.h5')
+    print("load Model5(acc 87%) for cifar-10")
+else:
+    print('please specify right model name!')
+    os._exit(0)
+
 
 # mark down the training value ranges of neurons
 model_neuron_values = load_file('./%s_neuron_ranges.npy' % model_name)
@@ -149,7 +147,7 @@ for i in range(fixed_test_cases_num):
 
 
     img_name = os.path.join(img_dir,img_names[i]) # dir+name 合成single img path, (name 即img_names[i])
-    if (i + 1) % 5 == 0:
+    if (i + 1) % 20 == 0:
         print("Input "+ str(i+1) + "/" + str(fixed_test_cases_num) + ": " + img_name)
 
     tmp_img = preprocess_image(img_name, img_height, img_width, img_channels_num) # function, return a copy of the img in the path, 准备mutate -> gen_img
@@ -190,8 +188,8 @@ for i in range(fixed_test_cases_num):
             # print("----------------For a seed img %d: %d, model predicts %d, wrong------------" \
             #       % (i+1, mannual_label, orig_pred_label))
 
-        # Tensor: (?,) first dimension is not fixed in the graph and it can vary between run calls
-        # model.layers[-2] refers to the layer before final activation
+        
+        # model.layers[-2] refers to the layer before final activation function, like softmax
         loss_1 = K.mean(model.layers[-1].output[..., orig_pred_label])
         loss_2 = K.mean(model.layers[-1].output[..., label_top5[-2]])
         loss_3 = K.mean(model.layers[-1].output[..., label_top5[-3]])
@@ -275,11 +273,11 @@ for i in range(fixed_test_cases_num):
             # print('coverage diff = %.3f, > %.4f? %s' % (current_coverage - previous_coverage, 0.01 / (i + 1), current_coverage - previous_coverage >  0.01 / (i + 1)))
             # print('perturb_adversrial = %f, < 0.01 %s' % (perturb_adversrial, perturb_adversrial < 0.1))
             if current_coverage - previous_coverage > 0.01 / (i + 1) and perturb_adversrial < 0.02:
-                print("======find a good gen_img to imrpove NC and can be a new seed======")
+                print("=find a good gen_img to imrpove NC and can be a new seed=")
                 img_list.append(gen_img)
 
             # Find an adversrial, break 否？
-            if advers_pred_label != mannual_label:
+            if advers_pred_label != orig_pred_label:
                 if iters == 0:
                     find_adv_one_epoch += 1
 
@@ -308,7 +306,7 @@ for i in range(fixed_test_cases_num):
                 # print("===========Find an adversrial, break============")
                 break
 
-    if (i + 1) % 5 == 0:
+    if (i + 1) % 20 == 0:
         print('NC: %d/%d <=> %.3f' % (len([v for v in model_layer_times2.values() if v > 0]), \
         total_neuron_num, (neuron_covered(model_layer_times2)[2])))
 

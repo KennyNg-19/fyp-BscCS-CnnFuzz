@@ -1,4 +1,4 @@
-
+ 
 # coding: utf-8
 
 # cmd with 7 params: python improved_method.py modelNo(4 or 5) 0.25 30 epoch_num lambda sec_num [4123]
@@ -74,11 +74,11 @@ else:
 # load model
 model_num = sys.argv[1]
 
-if model_num == '4':
+if model_num == '4': # an underfitting model
     model_name = 'Model4'
     model = load_model('Model4.h5')
-    print("load Model4(acc 75%) for cifar-10")
-elif model_num == '5':
+    print("load Model4(1524 neurons, acc 75%) for cifar-10")
+elif model_num == '5': # with dropout layer
     model_name = 'Model5'
     model = load_model('Model5.h5')
     print("load Model5(acc 87%) for cifar-10")
@@ -256,12 +256,12 @@ for i in range(test_img_num):
             #       % (i+1, right_label, orig_pred_label))
 
 
-        # Tensor: (?,) first dimension is not fixed in the graph and it can vary between run calls
-        loss_1 = K.mean(model.layers[-1].output[..., orig_pred_label])
-        loss_2 = K.mean(model.layers[-1].output[..., label_top5[-2]])
-        loss_3 = K.mean(model.layers[-1].output[..., label_top5[-3]])
-        loss_4 = K.mean(model.layers[-1].output[..., label_top5[-4]])
-        loss_5 = K.mean(model.layers[-1].output[..., label_top5[-5]])
+        # model.layers[-2] refers to the layer before final activation function, like softmax
+        loss_1 = K.mean(model.layers[-2].output[..., orig_pred_label])
+        loss_2 = K.mean(model.layers[-2].output[..., label_top5[-2]])
+        loss_3 = K.mean(model.layers[-2].output[..., label_top5[-3]])
+        loss_4 = K.mean(model.layers[-2].output[..., label_top5[-4]])
+        loss_5 = K.mean(model.layers[-2].output[..., label_top5[-5]])
 
         # Optimization 第一部分，sum(c_topk) - c， hyper param: predict_weight = 0.5,
         layer_output = (predict_weight * (loss_2 + loss_3 + loss_4 + loss_5) - loss_1)
