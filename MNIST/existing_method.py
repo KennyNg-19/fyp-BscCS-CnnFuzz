@@ -18,26 +18,36 @@ from keras.models import load_model
 from utils import *
 from IO_and_init import *
 
-model_name = sys.argv[1]
-if model_name == '1':
+model_no = sys.argv[1]
+assert model_no in ['1', '2', '3'], 'No such model!'
+if model_no == '1':
     model_name = "Model1"
     model = load_model('./Model1.h5')
     print('LeNet-1(52 neurons) loaded')
-elif model_name == '2':
+elif model_no == '2':
     model_name = "Model2"
     model = load_model('./Model2.h5')
     print('LeNet-4(148 neurons) loaded')
-elif model_name == '3':
+elif model_no == '3':
     model_name = "Model3"
     model = load_model('./Model3.h5')
     print('LeNet-5(268 neurons) loaded')
-else:
-    print("No such a model!!")
-    os._exit(0)
 
 # model.summary()
 
 print("------------------------Run existing testing method for MNIST set-------------------------")
+
+# set hyper params from cmd
+threshold = float(sys.argv[2]) # activation threshold
+assert (threshold > 0 and threshold < 1), 'Activation threshold should in the range (0, 1)'
+target_neuron_cover_num = int(sys.argv[3]) # neurons to cover
+iteration_times = int(sys.argv[4]) # epochs
+balance_lambda = float(sys.argv[5]) # Optimization λ, greater then focus on Neuron coverage; lese, on adversrial example
+neuron_select_strategy = sys.argv[7] # among [1 2 3 4], pick one, or more
+num_strategy = [x for x in neuron_select_strategy if x in ['1', '2', '3', '4']] # auto filter valid No.
+assert num_strategy != [], 'No. of neuron_select_strategy should be one of [1, 2, 3, 4]'
+print("\nNeuron Selection Strategies: " + str(num_strategy),
+    ", each aims at %d neurons" % int(target_neuron_cover_num / len(num_strategy)))
 
 # set input dir: seeds
 img_dir = './seeds_existing_method/'
@@ -71,25 +81,14 @@ total_section_num = k_section_neurons_num * multisection_num # constant, of all 
 upper_corner_times = init_coverage_times(model)
 lower_corner_times = init_coverage_times(model)
 
-
-# set hyper params
-threshold = float(sys.argv[2]) # activation threshold
-target_neuron_cover_num = int(sys.argv[3]) # neurons to cover
-iteration_times = int(sys.argv[4]) # epochs
-balance_lambda = float(sys.argv[5]) # Optimization λ, greater then focus on Neuron coverage; lese, on adversrial example
-neuron_select_strategy = sys.argv[7] # among [1 2 3 4], pick one, or more
-num_strategy = [x for x in neuron_select_strategy if x in ['1', '2', '3', '4']]
-print("\nNeuron Selection Strategies: " + str(num_strategy),
-    ", each aims at %d neurons" % int(target_neuron_cover_num / len(num_strategy)))
-
-
+# params
 predict_weight = 0.5 # weight, in 1st part of optimization 
 learning_step = 0.02
 
 total_time = 0
 total_norm = 0
 total_adversrial_num = 0
-total_perturb_adversrial = 0
+total_pertrub_ratio = 0
 total_adver_iterations = 0
 
 wrong_predi = 0
@@ -230,13 +229,13 @@ for i in range(seeds_num):
             diff_img = gen_img - orig_img
             L2_norm = np.linalg.norm(diff_img)
             orig_L2_norm = np.linalg.norm(orig_img)
-            perturb_adversrial = L2_norm / orig_L2_norm
+            pertrub_ratio = L2_norm / orig_L2_norm
 
 
         # Evaluate measures: if coverage improved by x′ is desired and l2_distance is small
             # print('coverage diff = %.3f, > %.4f? %s' % (current_coverage - previous_coverage, 0.01 / (i + 1), current_coverage - previous_coverage >  0.01 / (i + 1)))
-            # print('perturb_adversrial = %f, < 0.01 %s' % (perturb_adversrial, perturb_adversrial < 0.1))
-            if current_coverage - previous_coverage > 0.01 / (i + 1) and perturb_adversrial < 0.02:
+            # print('pertrub_ratio = %f, < 0.01 %s' % (pertrub_ratio, pertrub_ratio < 0.1))
+            if current_coverage - previous_coverage > 0.01 / (i + 1) and pertrub_ratio < 0.02:
                 print("======Find a good gen_img to imrpove NC and can be a new seed======")
                 img_list.append(gen_img)
 
@@ -252,7 +251,7 @@ for i in range(seeds_num):
 
                 total_norm += L2_norm
 
-                total_perturb_adversrial += perturb_adversrial
+                total_pertrub_ratio += pertrub_ratio
 
                 gen_img_tmp = gen_img.copy()
 
@@ -273,7 +272,7 @@ for i in range(seeds_num):
                 
                 # print("===========Find an adversrial, break============")
                 break
-        total_adver_iterations += iters
+        total_adver_iterations += (iters + 1) # iters start from 0
 
     if (i + 1) % 10 == 0:    
         nueron_covered_num = len([v for v in model_layer_times2.values() if v > 0])
@@ -293,7 +292,7 @@ for i in range(seeds_num):
 
         upper_corner_covered = len([v for v in upper_corner_times.values() if v > 0]) 
         upper_corner_coverage = upper_corner_covered/k_section_neurons_num
-        
+
         print('====================================')                            
         print('K-section coverage: %d/%d <=> %.3f' % (covered_sections_num, \
                                                                 total_section_num, k_section_coverage))            
@@ -330,9 +329,9 @@ try:
     print('\ntotal adversrial num  = %d/%d chances(epochs)' % (total_adversrial_num, seeds_num))
     print('avg norm = %.3f ' % (total_norm / total_adversrial_num))
     # print('average time of generating an adversarial input %.3f s' % (total_time / total_adversrial_num))
-    print('avg perb per adversrial = %.4f' % (total_perturb_adversrial / total_adversrial_num))
+    print('avg perturbation ratio = %.4f' % (total_pertrub_ratio / total_adversrial_num))
     print('total mutation iterations for these adversrials: %d (/%d)' % (total_adver_iterations, seeds_num * iteration_times))
-    print('avg mutation iterations for a adversarial generation: %.2f' % (total_adversrial_num / total_adver_iterations))
+    print('avg mutation iterations for a adversarial generation: %.3f' % (total_adver_iterations/total_adversrial_num))
 except ZeroDivisionError:
     print('No adversrial is generated')
 print('\ntotal time = %.3fs' % total_time)
