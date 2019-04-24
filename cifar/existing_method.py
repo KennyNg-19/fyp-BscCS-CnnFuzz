@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# cmd with 7 params: python existing_method.py modelNo(4/5) 0.25 30 epoch_num lambda sec_num [4123]
+# cmd with 7 params: python existing_method.py 4 0.25 30 3 lambda 2 [4123]
 
 from __future__ import print_function
 
@@ -279,7 +279,7 @@ for i in range(fixed_test_cases_num):
                 img_list.append(gen_img)
 
             # Find an adversrial, break 否？
-            if advers_pred_label != orig_pred_label:
+            if advers_pred_label != mannual_label:
                 if iters == 0:
                     find_adv_one_epoch += 1
 

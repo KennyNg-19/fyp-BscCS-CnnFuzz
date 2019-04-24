@@ -262,10 +262,13 @@ def preprocess_image(img_path, target_h, target_w, target_channels_num):
     return input_img_data
 
 def deprocess_image(x):
+    x = x.reshape(x.shape[1], x.shape[2], x.shape[3])
     # de-normalization: [0,1] -> [0,255]
     x *= 255
+    # 'BGR'->'RGB'
+    x = x[:, :, ::-1]
     x = np.clip(x, 0, 255).astype('uint8')
-    return x.reshape(x.shape[1], x.shape[2], x.shape[3])
+    return x
 
 def normalize(x):
     # utility function to normalize a tensor by its L2 norm
